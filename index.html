@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>尋光農場大挑戰</title>
+    <title>食物森林：尋光模擬器 Pro v2.0</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -11,212 +11,249 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <style>
-        html, body { height: 100%; width: 100%; margin: 0; padding: 0; background-color: #f5f5f4; overflow: hidden; touch-action: manipulation; }
-        #root { height: 100%; width: 100%; display: flex; flex-direction: column; }
-        @keyframes float-down { 0% { transform: translateY(-10vh) rotate(0deg); opacity: 0; } 10% { opacity: 0.8; } 100% { transform: translateY(110vh) rotate(360deg); opacity: 0; } }
-        @keyframes pulse-fade { 0%, 100% { transform: scale(1); opacity: 0.6; } 50% { transform: scale(1.2); opacity: 1; } }
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap');
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: #f0f2f0; margin: 0; overflow: hidden; }
+        .farm-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; width: 100%; max-width: 650px; }
+        .cell-aspect { aspect-ratio: 1 / 1; transition: all 0.2s; border-width: 3px; }
+        .glass-panel { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); }
+        @keyframes popIn { 0% { transform: scale(0.9); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+        .animate-pop { animation: popIn 0.3s ease-out; }
+        .tutorial-overlay { background: rgba(0,0,0,0.85); z-index: 100; }
     </style>
 </head>
 <body>
     <div id="root"></div>
 
-    <script>
-        // 強力錯誤攔截，避免白屏
-        window.onerror = function(message, source, lineno, colno, error) {
-            console.error("捕獲錯誤:", message);
-            if (message.includes("Script error") || message.includes("localStorage")) {
-                // 如果是存取或腳本錯誤，嘗試手動初始化
-                const rootEl = document.getElementById('root');
-                if (rootEl && rootEl.innerHTML === "") {
-                    rootEl.innerHTML = `<div style="padding:20px;text-align:center;"><h2>載入中稍候...</h2><button onclick="location.reload()">手動重整</button></div>`;
-                }
-            }
-            return false; 
-        };
-    </script>
-
     <script type="text/babel">
-        const { useState, useEffect, useMemo, useRef } = React;
+        const { useState, useEffect } = React;
 
-        // --- 強化版安全儲存 ---
-        const safeGetStorage = (key) => {
-            try { 
-                const data = window.localStorage.getItem(key);
-                return data ? data : null;
-            } catch (e) { 
-                console.warn("Storage access denied");
-                return null; 
-            }
-        };
-        const safeSetStorage = (key, value) => {
-            try { window.localStorage.setItem(key, value); } catch (e) { }
-        };
-
-        // --- 元件內容 ---
-        const IconWrapper = ({ children, className }) => <span className={`leading-none inline-block ${className || ''}`}>{children}</span>;
-        const Leaf = ({className}) => <IconWrapper className={className}>🍃</IconWrapper>;
-        const DollarSign = ({className}) => <IconWrapper className={className}>💰</IconWrapper>;
-        const Calendar = ({className}) => <IconWrapper className={className}>📅</IconWrapper>;
-        const Zap = ({className}) => <IconWrapper className={className}>⚡</IconWrapper>;
-        const TreePine = ({className}) => <IconWrapper className={className}>🌲</IconWrapper>;
-        const LeafyGreen = ({className}) => <IconWrapper className={className}>🥬</IconWrapper>;
-        const Sprout = ({className}) => <IconWrapper className={className}>🌱</IconWrapper>;
-        const Cherry = ({className}) => <IconWrapper className={className}>🍒</IconWrapper>;
-        const Truck = ({className}) => <IconWrapper className={className}>🚜</IconWrapper>;
-        const Scissors = ({className}) => <IconWrapper className={className}>✂️</IconWrapper>;
-        const Shovel = ({className}) => <IconWrapper className={className}>⛏️</IconWrapper>;
-        const AlertTriangle = ({className}) => <IconWrapper className={className}>⚠️</IconWrapper>;
-        const X = ({className}) => <IconWrapper className={className}>❌</IconWrapper>;
-        const Sparkles = ({className}) => <IconWrapper className={className}>✨</IconWrapper>;
-        const Flag = ({className}) => <IconWrapper className={className}>🏁</IconWrapper>;
-
-        // 資料定義
         const CROPS = {
-          herb: { id: 'herb', name: '大型草本', icon: <Leaf className="text-teal-500" />, carbonReq: 0, cost: 10, growthMonths: 2, pruneStartMonth: 2, pruneInterval: 1, description: "含碳0可種。滿2月可修剪。", category: 'carbon', typhoonCarbon: 3, actions: { prune: { label: '修剪', carbon: 1, keep: true }, dig: { label: '挖除', carbon: 3, remove: true } } },
-          fastTree: { id: 'fastTree', name: '速生樹種', icon: <Sprout className="text-green-600" />, carbonReq: 0, cost: 15, growthMonths: 6, pruneStartMonth: 6, pruneInterval: 2, description: "含碳0可種。滿6月可修剪。", category: 'carbon', typhoonCarbon: 15, actions: { prune: { label: '修剪', carbon: 3, keep: true }, dig: { label: '挖除', baseCarbon: 15, bonusCarbon: 25, bonusThreshold: 24, remove: true } } },
-          vegetable: { id: 'vegetable', name: '蔬菜', icon: <LeafyGreen className="text-green-500" />, carbonReq: 5, cost: 1, growthMonths: 1, description: "含碳5可種。短期獲利。", category: 'money', typhoonCarbon: 1, actions: { harvest: { label: '收成', money: 10, carbon: -1, remove: true } } },
-          shrub: { id: 'shrub', name: '果實灌木', icon: <Cherry className="text-pink-600" />, carbonReq: 15, cost: 20, growthMonths: 12, description: "含碳15可種。長期作物。", category: 'money', typhoonCarbon: 15, actions: { harvest: { label: '收成', money: 300, carbon: -30, keep: true, resetGrowth: 3 }, dig: { label: '挖除', carbon: 15, remove: true } } },
-          fruitTree: { id: 'fruitTree', name: '果樹', icon: <TreePine className="text-red-500" />, carbonReq: 30, cost: 20, growthMonths: 24, description: "含碳30可種。高經濟價值。", category: 'money', typhoonCarbon: 15, actions: { harvest: { label: '收成', money: 500, carbon: -50, keep: true, resetGrowth: 6 }, dig: { label: '挖除', carbon: 15, remove: true } } },
-          premiumTree: { id: 'premiumTree', name: '極相林木', icon: <TreePine className="text-green-800" />, carbonReq: 50, cost: 30, growthMonths: 36, pruneStartMonth: 12, pruneInterval: 6, description: "含碳50可種。冬日落葉。", category: 'carbon', typhoonCarbon: 50, actions: { prune: { label: '修剪', carbon: 25, keep: true }, dig: { label: '挖除', baseCarbon: 15, bonusCarbon: 50, bonusThreshold: 36, remove: true } } }
+            mango: { id: 'mango', name: '芒果(冠層)', icon: '🌳', cost: 80, carbon: 100, growth: 18, provides: ['shade'], layer: '1', desc: '大樹，提供遮蔭' },
+            banana: { id: 'banana', name: '香蕉(低木)', icon: '🍌', cost: 40, carbon: 30, growth: 8, provides: ['moisture'], layer: '2', desc: '保濕，抵禦乾旱' },
+            pigeonPea: { id: 'pigeonPea', name: '樹豆(灌木)', icon: '🌿', cost: 20, carbon: 15, growth: 4, provides: ['nitrogen'], layer: '3', desc: '固氮，加速生長' },
+            sweetPotato: { id: 'sweetPotato', name: '地瓜葉(地被)', icon: '🍃', cost: 10, carbon: 5, growth: 2, provides: ['ground_cover'], layer: '5', desc: '覆蓋地面防止雜草' },
+            ginger: { id: 'ginger', name: '薑黃(地下)', icon: '🍠', cost: 15, carbon: 10, growth: 6, needs: ['shade'], layer: '6', money: 120, desc: '需在大樹旁種植' },
+            taro: { id: 'taro', name: '芋頭(地下)', icon: '🥔', cost: 20, carbon: 10, growth: 5, soil_pref: 'wetland', layer: '6', money: 150, desc: '需種在藍色濕地' }
         };
-
-        const ALL_EVENTS = {
-          1: { id: 1, name: '志工招募', desc: '成功吸引附近居民加入志工', type: 'good' },
-          2: { id: 2, name: '農夫市集', desc: '參與假日農夫市集擺攤', type: 'good' },
-          3: { id: 3, name: '輕度颱風', desc: '隨機移除作物，殘枝化作養分', type: 'bad' },
-          6: { id: 6, name: '受邀演講', desc: '成功招募志工，獲得講師費', type: 'good' },
-          8: { id: 8, name: '極端氣候(晴)', desc: '日照過強，暫停收成', type: 'weather' },
-          9: { id: 9, name: '政府補助', desc: '成功爭取到補助經費', type: 'good' },
-        };
-
-        const getSeason = (m) => { if (m >= 3 && m <= 5) return 'spring'; if (m >= 6 && m <= 8) return 'summer'; if (m >= 9 && m <= 11) return 'autumn'; return 'winter'; };
 
         function App() {
-          const [gameState, setGameState] = useState('intro');
-          const [money, setMoney] = useState(5000);
-          const [carbon, setCarbon] = useState(0); 
-          const [year, setYear] = useState(1);
-          const [month, setMonth] = useState(1);
-          const [actionPoints, setActionPoints] = useState(10);
-          const [grid, setGrid] = useState(Array(36).fill(null)); 
-          const [selectedCrop, setSelectedCrop] = useState(null);
-          const [highScores, setHighScores] = useState([]);
-          const [playerName, setPlayerName] = useState('');
-          const [showEventModal, setShowEventModal] = useState(false);
-          const [quarterlyReport, setQuarterlyReport] = useState(null);
-          const [activeTab, setActiveTab] = useState('farm');
+            const [showTutorial, setShowTutorial] = useState(true);
+            const [money, setMoney] = useState(300);
+            const [carbon, setCarbon] = useState(0);
+            const [year, setYear] = useState(1);
+            const [month, setMonth] = useState(1);
+            const [ap, setAp] = useState(10);
+            const [weather, setWeather] = useState('正常');
+            const [grid, setGrid] = useState(() => 
+                Array(36).fill(null).map(() => ({
+                    content: null,
+                    type: Math.random() > 0.85 ? 'gravel' : (Math.random() < 0.1 ? 'wetland' : 'normal')
+                }))
+            );
+            const [selectedCrop, setSelectedCrop] = useState('mango');
+            const [logs, setLogs] = useState(['歡迎來到食物森林！']);
 
-          useEffect(() => {
-              const saved = safeGetStorage('lsFarmScores');
-              if (saved) { try { setHighScores(JSON.parse(saved)); } catch(e) {} }
-          }, []);
+            const getNeighbors = (index) => {
+                const res = [], x = index % 6, y = Math.floor(index / 6);
+                for (let dy = -1; dy <= 1; dy++) {
+                    for (let dx = -1; dx <= 1; dx++) {
+                        if (dx === 0 && dy === 0) continue;
+                        const nx = x + dx, ny = y + dy;
+                        if (nx >= 0 && nx < 6 && ny >= 0 && ny < 6) res.push(ny * 6 + nx);
+                    }
+                }
+                return res;
+            };
 
-          const handleGameEnd = () => {
-              const finalScore = (carbon * 10) + money;
-              const newRecord = { name: playerName || "匿名農夫", score: finalScore, carbon, money, date: new Date().toLocaleDateString() };
-              const updated = [...highScores, newRecord].sort((a,b)=>b.score-a.score).slice(0,5);
-              setHighScores(updated);
-              safeSetStorage('lsFarmScores', JSON.stringify(updated));
-              setGameState('finished');
-          };
+            const handleNextMonth = () => {
+                let nm = month + 1, ny = year;
+                if (nm > 12) { nm = 1; ny++; }
+                const isDrought = Math.random() > 0.85;
+                setWeather(isDrought ? '☀️ 嚴重乾旱' : '正常');
 
-          const nextMonth = () => {
-              let nm = month + 1; let ny = year;
-              if (nm > 12) { nm = 1; ny++; }
-              if (ny > 5) { handleGameEnd(); return; }
-              
-              const ng = grid.map(c => {
-                  if(!c) return null;
-                  return { ...c, ageMonths: c.ageMonths + 1, stage: (c.ageMonths + 1 >= c.growthMonths ? 'mature' : 'growing') };
-              });
-              setGrid(ng); setMonth(nm); setYear(ny); setActionPoints(10);
-              
-              if (nm % 3 === 0) {
-                  const evt = ALL_EVENTS[Object.keys(ALL_EVENTS)[Math.floor(Math.random()*6)]];
-                  setQuarterlyReport({ title: `第 ${ny} 年 第 ${Math.ceil(nm/3)} 季報告`, event: evt });
-                  setShowEventModal(true);
-              }
-          };
+                const newGrid = grid.map((cell, i) => {
+                    if (!cell.content) {
+                        if (Math.random() > 0.92) return { ...cell, content: { name: '雜草', icon: '🌾', isWeed: true } };
+                        return cell;
+                    }
+                    if (cell.content.isWeed) return cell;
 
-          const handlePlant = (i) => {
-              if (!selectedCrop || actionPoints <= 0) return;
-              const crop = CROPS[selectedCrop];
-              if (money < crop.cost) return;
-              const ng = [...grid];
-              ng[i] = { ...crop, ageMonths: 0, stage: 'seed' };
-              setGrid(ng); setMoney(m => m - crop.cost); setActionPoints(ap => ap - 1);
-          };
+                    const neighbors = getNeighbors(i);
+                    let boost = 1;
+                    const neighborCrops = neighbors.map(ni => grid[ni].content).filter(Boolean);
+                    if (neighborCrops.some(nc => nc.provides?.includes('nitrogen'))) boost += 1;
+                    if (cell.content.needs?.includes('shade') && neighborCrops.some(nc => nc.provides?.includes('shade'))) boost += 1;
+                    if (isDrought && !neighborCrops.some(nc => nc.provides?.includes('ground_cover'))) boost -= 2;
 
-          return (
-            <div className="flex flex-col h-full bg-stone-50 overflow-hidden">
-              {gameState === 'intro' ? (
-                <div className="flex-1 flex flex-col items-center justify-center p-6 bg-green-900 text-white">
-                  <h1 className="text-4xl font-bold mb-4">尋光農場</h1>
-                  <input className="text-black p-3 rounded mb-4" placeholder="輸入名稱" value={playerName} onChange={e=>setPlayerName(e.target.value)} />
-                  <button onClick={()=>setGameState('playing')} className="bg-yellow-400 text-green-900 px-10 py-3 rounded-full font-bold">進入農場</button>
-                </div>
-              ) : gameState === 'playing' ? (
-                <>
-                  <header className="p-4 bg-white shadow flex justify-between font-bold">
-                    <div>Y{year} M{month} | ⚡{actionPoints}</div>
-                    <div className="text-green-700">💰{money} | 🍃{carbon}</div>
-                  </header>
-                  
-                  <div className="flex md:hidden border-b">
-                    <button onClick={()=>setActiveTab('farm')} className={`flex-1 p-3 ${activeTab==='farm'?'bg-green-100 border-b-2 border-green-600':''}`}>農場</button>
-                    <button onClick={()=>setActiveTab('shop')} className={`flex-1 p-3 ${activeTab==='shop'?'bg-blue-100 border-b-2 border-blue-600':''}`}>商店</button>
-                  </div>
+                    const nextAge = cell.content.age + boost;
+                    return { ...cell, content: { ...cell.content, age: Math.max(0, nextAge), isMature: nextAge >= cell.content.growth } };
+                });
 
-                  <main className="flex-1 flex overflow-hidden">
-                    <aside className={`${activeTab==='shop'?'flex':'hidden'} md:flex w-full md:w-64 flex-col p-4 bg-white border-r overflow-y-auto`}>
-                      <h3 className="font-bold mb-3">作物清單</h3>
-                      {Object.values(CROPS).map(c => (
-                        <button key={c.id} onClick={()=>setSelectedCrop(c.id)} className={`p-3 mb-2 rounded border text-left ${selectedCrop===c.id?'bg-green-50 border-green-500':'bg-white'}`}>
-                          <div className="font-bold">{c.name} (${c.cost})</div>
-                          <div className="text-xs opacity-60">{c.description}</div>
-                        </button>
-                      ))}
-                    </aside>
-                    <section className={`${activeTab==='farm'?'flex':'hidden'} md:flex flex-1 p-4 flex-col items-center overflow-y-auto`}>
-                       <div className="grid grid-cols-6 gap-1 w-full max-w-md">
-                          {grid.map((c, i) => (
-                            <div key={i} onClick={()=>handlePlant(i)} className="aspect-square border bg-white rounded flex items-center justify-center text-2xl relative">
-                               {c ? (c.stage==='seed'?'🌱':c.icon) : ""}
-                               {c && <div className="absolute bottom-0 w-full h-1 bg-gray-200"><div className="h-full bg-green-500" style={{width:`${(c.ageMonths/c.growthMonths)*100}%`}}></div></div>}
+                setGrid(newGrid); setMonth(nm); setYear(ny); setAp(10);
+                addLog(`進入 ${ny} 年 ${nm} 月，體力已恢復。`);
+                if (isDrought) addLog("⚠️ 乾旱襲來！請檢查地被覆蓋。");
+            };
+
+            const addLog = (msg) => setLogs(prev => [msg, ...prev].slice(0, 8));
+
+            const handleCellClick = (i) => {
+                const cell = grid[i];
+                if (ap <= 0) { addLog("❌ 體力不足！"); return; }
+                if (!cell.content || cell.content.isWeed) {
+                    const crop = CROPS[selectedCrop];
+                    if (money < crop.cost) { addLog("💰 資金不足！"); return; }
+                    if (crop.soil_pref && crop.soil_pref !== cell.type) {
+                        addLog(`⚠️ ${crop.name} 需要${cell.type === 'wetland' ? '濕地' : '特殊土地'}！`);
+                        return;
+                    }
+                    const newGrid = [...grid];
+                    newGrid[i].content = { ...crop, age: 0, isMature: false };
+                    setGrid(newGrid); setMoney(m => m - crop.cost); setAp(a => a - 1);
+                    addLog(`🌱 種下了 ${crop.name}。`);
+                } else if (cell.content.isMature) {
+                    setMoney(m => m + (cell.content.money || 0));
+                    setCarbon(c => c + cell.content.carbon);
+                    const newGrid = [...grid]; newGrid[i].content = null; setGrid(newGrid); setAp(a => a - 1);
+                    addLog(`🧺 收穫 ${cell.content.name}！`);
+                }
+            };
+
+            return (
+                <div className="h-screen w-screen flex flex-col md:flex-row text-slate-800 relative">
+                    {/* 新手教學彈窗 */}
+                    {showTutorial && (
+                        <div className="tutorial-overlay fixed inset-0 flex items-center justify-center p-4">
+                            <div className="bg-white rounded-3xl p-8 max-w-2xl w-full animate-pop shadow-2xl">
+                                <h2 className="text-4xl font-black text-green-700 mb-6 flex items-center gap-2">🌿 如何打造食物森林？</h2>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 text-lg leading-relaxed">
+                                    <div className="space-y-4">
+                                        <p className="font-bold text-slate-600">土地屬性說明：</p>
+                                        <div className="flex items-center gap-3"><div className="w-8 h-8 bg-blue-100 border-2 border-blue-400 rounded"></div> <span><b>藍色(濕地)</b>：適合種芋頭</span></div>
+                                        <div className="flex items-center gap-3"><div className="w-8 h-8 bg-orange-100 border-2 border-orange-400 rounded"></div> <span><b>橘色(石礫)</b>：挑戰性地形</span></div>
+                                        <div className="flex items-center gap-3"><div className="w-8 h-8 bg-white/60 border-2 border-slate-200 rounded"></div> <span><b>一般</b>：適合大部分作物</span></div>
+                                    </div>
+                                    <div className="space-y-4">
+                                        <p className="font-bold text-slate-600">共生規則：</p>
+                                        <ul className="list-disc list-inside">
+                                            <li><b>樹豆</b>：提供氮肥，加速周邊生長</li>
+                                            <li><b>大樹</b>：提供遮蔭，薑黃長更快</li>
+                                            <li><b>地瓜葉</b>：覆蓋土地，抵抗乾旱</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                                <button onClick={() => setShowTutorial(false)} className="w-full bg-green-600 hover:bg-green-700 text-white py-4 rounded-2xl text-2xl font-black shadow-lg">開始模擬 🚀</button>
                             </div>
-                          ))}
-                       </div>
-                       <button onClick={nextMonth} className="mt-8 bg-stone-800 text-white px-8 py-3 rounded-xl font-bold">下個月</button>
-                    </section>
-                  </main>
-                </>
-              ) : (
-                <div className="flex-1 flex flex-col items-center justify-center p-6 bg-stone-900 text-white">
-                  <h2 className="text-3xl font-bold mb-4">結算成績</h2>
-                  <div className="space-y-2 mb-6">
-                    {highScores.map((s,i) => <div key={i}>{s.name}: {s.score}分 ({s.date})</div>)}
-                  </div>
-                  <button onClick={()=>location.reload()} className="bg-white text-black px-6 py-2 rounded">回主選單</button>
-                </div>
-              )}
+                        </div>
+                    )}
 
-              {showEventModal && quarterlyReport && (
-                <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4">
-                  <div className="bg-white p-6 rounded-xl max-w-xs w-full">
-                    <h3 className="font-bold text-lg mb-2">{quarterlyReport.title}</h3>
-                    <div className="p-3 bg-blue-50 rounded mb-4">
-                      <b>{quarterlyReport.event.name}</b>: {quarterlyReport.event.desc}
+                    {/* 左側面板 - 標題加大 */}
+                    <aside className="w-full md:w-96 glass-panel border-b md:border-r flex flex-col shadow-2xl z-10">
+                        <div className="p-8 bg-gradient-to-br from-green-800 to-emerald-950 text-white">
+                            <h1 className="text-5xl font-black mb-2 tracking-tighter">食物森林</h1>
+                            <p className="text-green-300 text-sm font-bold tracking-[0.2em] opacity-80">FOOD FOREST SIMULATOR</p>
+                        </div>
+                        <div className="p-6 grid grid-cols-3 md:grid-cols-1 gap-4">
+                            <div className="bg-white p-4 rounded-2xl shadow-sm border-2 border-slate-100">
+                                <div className="text-sm font-bold text-slate-400">資金可用</div>
+                                <div className="text-3xl font-black text-amber-600">${money}</div>
+                            </div>
+                            <div className="bg-white p-4 rounded-2xl shadow-sm border-2 border-slate-100">
+                                <div className="text-sm font-bold text-slate-400">總碳匯量</div>
+                                <div className="text-3xl font-black text-green-700">{carbon}</div>
+                            </div>
+                            <div className="bg-white p-4 rounded-2xl shadow-sm border-2 border-slate-100">
+                                <div className="text-sm font-bold text-slate-400">天氣: <span className="text-red-500">{weather}</span></div>
+                                <div className="text-xl font-black">Y{year} M{month}</div>
+                            </div>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-6 hidden md:block">
+                            <p className="text-xs font-black text-slate-400 mb-4 tracking-widest uppercase">選擇作物層次</p>
+                            <div className="space-y-3">
+                                {Object.values(CROPS).map(crop => (
+                                    <button key={crop.id} onClick={() => setSelectedCrop(crop.id)}
+                                        className={`w-full p-4 rounded-2xl border-4 transition-all flex items-center gap-4 ${selectedCrop === crop.id ? 'border-green-600 bg-green-50 scale-[1.02]' : 'border-transparent bg-white hover:bg-slate-50'}`}>
+                                        <span className="text-4xl">{crop.icon}</span>
+                                        <div className="text-left">
+                                            <div className="font-black text-lg leading-tight">{crop.name}</div>
+                                            <div className="text-xs font-bold text-slate-400 mt-1">成本: ${crop.cost} | {crop.desc}</div>
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </aside>
+
+                    {/* 中央農場 */}
+                    <main className="flex-1 flex flex-col p-6 items-center justify-center bg-[#e8ede8] relative">
+                        <div className="w-full max-w-lg mb-8">
+                            <div className="flex justify-between items-end mb-2 font-black">
+                                <span className="text-xl text-slate-600">⚡ 體力 (AP)</span>
+                                <span className="text-2xl text-blue-600">{ap} / 10</span>
+                            </div>
+                            <div className="h-4 w-full bg-slate-200 rounded-full overflow-hidden shadow-inner">
+                                <div className="h-full bg-blue-500 progress-bar shadow-[0_0_10px_rgba(59,130,246,0.5)]" style={{ width: `${ap * 10}%` }}></div>
+                            </div>
+                        </div>
+
+                        <div className="farm-grid">
+                            {grid.map((cell, i) => (
+                                <div key={i} onClick={() => handleCellClick(i)}
+                                    className={`cell-aspect rounded-2xl cursor-pointer flex flex-col items-center justify-center relative shadow-md
+                                    ${cell.type === 'gravel' ? 'border-orange-400 bg-orange-50' : cell.type === 'wetland' ? 'border-blue-400 bg-blue-50' : 'border-white bg-white/60 hover:bg-white'}`}>
+                                    
+                                    {/* 土地屬性標籤 */}
+                                    {!cell.content && (
+                                        <div className="text-[10px] font-black opacity-30 uppercase tracking-tighter">
+                                            {cell.type === 'gravel' ? '石礫地' : cell.type === 'wetland' ? '濕地' : ''}
+                                        </div>
+                                    )}
+
+                                    {cell.content ? (
+                                        <>
+                                            <span className={`text-4xl md:text-5xl animate-pop ${cell.content.isMature ? 'animate-bounce' : ''}`}>
+                                                {cell.content.isWeed ? '🌾' : (cell.content.isMature ? cell.content.icon : '🌱')}
+                                            </span>
+                                            {!cell.content.isMature && !cell.content.isWeed && (
+                                                <div className="absolute bottom-2 w-3/4 h-2 bg-slate-200/50 rounded-full overflow-hidden">
+                                                    <div className="h-full bg-green-500" style={{ width: `${Math.min(100, (cell.content.age / cell.content.growth) * 100)}%` }}></div>
+                                                </div>
+                                            )}
+                                        </>
+                                    ) : null}
+                                </div>
+                            ))}
+                        </div>
+
+                        <button onClick={handleNextMonth} className="mt-10 w-full max-w-lg bg-slate-900 text-white py-6 rounded-3xl font-black text-2xl shadow-2xl hover:bg-black active:scale-95 transition-all">
+                            📅 下個月 (體力恢復)
+                        </button>
+
+                        {/* 手機版快速選單 */}
+                        <div className="md:hidden flex gap-2 overflow-x-auto w-full mt-6 pb-2">
+                                {Object.values(CROPS).map(crop => (
+                                    <button key={crop.id} onClick={() => setSelectedCrop(crop.id)} className={`flex-shrink-0 px-4 py-2 rounded-2xl border-2 font-bold ${selectedCrop === crop.id ? 'bg-green-700 text-white' : 'bg-white'}`}>
+                                        {crop.icon} {crop.name}
+                                    </button>
+                                ))}
+                        </div>
+                    </main>
+
+                    {/* 右下角日誌 - 加大且更明顯 */}
+                    <div className="fixed bottom-6 right-6 w-80 pointer-events-none z-50">
+                        <div className="bg-slate-900/90 backdrop-blur-md p-6 rounded-3xl shadow-2xl border-2 border-white/20">
+                            <p className="text-white/40 text-[10px] font-black mb-2 tracking-widest uppercase">系統日誌 System Logs</p>
+                            {logs.map((log, i) => (
+                                <div key={i} className={`text-sm md:text-base font-bold mb-1 animate-pop ${log.includes('❌') || log.includes('⚠️') ? 'text-red-400' : 'text-green-400'}`}>
+                                    • {log}
+                                </div>
+                            ))}
+                        </div>
                     </div>
-                    <button onClick={()=>setShowEventModal(false)} className="w-full bg-stone-800 text-white py-2 rounded">收到</button>
-                  </div>
                 </div>
-              )}
-            </div>
-          );
+            );
         }
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
     </script>
 </body>
 </html>
