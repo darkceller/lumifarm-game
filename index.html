@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>食物森林：尋光模擬器 Pro v2.0</title>
+    <title>食物森林：自律生態模擬器 Pro</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -19,6 +19,7 @@
         @keyframes popIn { 0% { transform: scale(0.9); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
         .animate-pop { animation: popIn 0.3s ease-out; }
         .tutorial-overlay { background: rgba(0,0,0,0.85); z-index: 100; }
+        .progress-bar { transition: width 0.8s cubic-bezier(0.34, 1.56, 0.64, 1); }
     </style>
 </head>
 <body>
@@ -31,8 +32,8 @@
             mango: { id: 'mango', name: '芒果(冠層)', icon: '🌳', cost: 80, carbon: 100, growth: 18, provides: ['shade'], layer: '1', desc: '大樹，提供遮蔭' },
             banana: { id: 'banana', name: '香蕉(低木)', icon: '🍌', cost: 40, carbon: 30, growth: 8, provides: ['moisture'], layer: '2', desc: '保濕，抵禦乾旱' },
             pigeonPea: { id: 'pigeonPea', name: '樹豆(灌木)', icon: '🌿', cost: 20, carbon: 15, growth: 4, provides: ['nitrogen'], layer: '3', desc: '固氮，加速生長' },
-            sweetPotato: { id: 'sweetPotato', name: '地瓜葉(地被)', icon: '🍃', cost: 10, carbon: 5, growth: 2, provides: ['ground_cover'], layer: '5', desc: '覆蓋地面防止雜草' },
-            ginger: { id: 'ginger', name: '薑黃(地下)', icon: '🍠', cost: 15, carbon: 10, growth: 6, needs: ['shade'], layer: '6', money: 120, desc: '需在大樹旁種植' },
+            sweetPotato: { id: 'sweetPotato', name: '地瓜葉(地被)', icon: '🍃', cost: 10, carbon: 5, growth: 2, provides: ['ground_cover'], layer: '5', desc: '自動壓制周邊雜草' },
+            ginger: { id: 'ginger', name: '薑黃(地下)', icon: '🍠', cost: 15, carbon: 10, growth: 6, needs: ['shade'], layer: '6', money: 120, desc: '在大樹旁生長更快' },
             taro: { id: 'taro', name: '芋頭(地下)', icon: '🥔', cost: 20, carbon: 10, growth: 5, soil_pref: 'wetland', layer: '6', money: 150, desc: '需種在藍色濕地' }
         };
 
@@ -44,14 +45,24 @@
             const [month, setMonth] = useState(1);
             const [ap, setAp] = useState(10);
             const [weather, setWeather] = useState('正常');
+            const [stability, setStability] = useState(0);
+            
             const [grid, setGrid] = useState(() => 
                 Array(36).fill(null).map(() => ({
                     content: null,
                     type: Math.random() > 0.85 ? 'gravel' : (Math.random() < 0.1 ? 'wetland' : 'normal')
                 }))
             );
+            
             const [selectedCrop, setSelectedCrop] = useState('mango');
-            const [logs, setLogs] = useState(['歡迎來到食物森林！']);
+            const [logs, setLogs] = useState(['歡迎！目標是建立自律森林。']);
+
+            // 計算穩定度 (多樣性越豐富分數越高)
+            useEffect(() => {
+                const activeTypes = new Set(grid.filter(c => c.content && !c.content.isWeed).map(c => c.content.id));
+                const score = Math.round((activeTypes.size / Object.keys(CROPS).size) * 100);
+                setStability(score);
+            }, [grid]);
 
             const getNeighbors = (index) => {
                 const res = [], x = index % 6, y = Math.floor(index / 6);
@@ -68,30 +79,50 @@
             const handleNextMonth = () => {
                 let nm = month + 1, ny = year;
                 if (nm > 12) { nm = 1; ny++; }
+                
                 const isDrought = Math.random() > 0.85;
                 setWeather(isDrought ? '☀️ 嚴重乾旱' : '正常');
 
                 const newGrid = grid.map((cell, i) => {
+                    const neighbors = getNeighbors(i);
+                    const neighborContents = neighbors.map(ni => grid[ni].content).filter(Boolean);
+                    
+                    // --- 自動化調節邏輯 ---
+                    // 1. 自動除草：如果格內是雜草，但周圍有地瓜葉
+                    if (cell.content?.isWeed) {
+                        if (neighborContents.some(nc => nc.provides?.includes('ground_cover'))) {
+                            return { ...cell, content: null }; // 雜草被地被植物壓制消滅
+                        }
+                        return cell; 
+                    }
+
+                    // 2. 隨機雜草生成
                     if (!cell.content) {
-                        if (Math.random() > 0.92) return { ...cell, content: { name: '雜草', icon: '🌾', isWeed: true } };
+                        if (Math.random() > 0.94) return { ...cell, content: { name: '雜草', icon: '🌾', isWeed: true } };
                         return cell;
                     }
-                    if (cell.content.isWeed) return cell;
 
-                    const neighbors = getNeighbors(i);
+                    // 3. 生長計算 (受固氮、遮蔭、乾旱影響)
                     let boost = 1;
-                    const neighborCrops = neighbors.map(ni => grid[ni].content).filter(Boolean);
-                    if (neighborCrops.some(nc => nc.provides?.includes('nitrogen'))) boost += 1;
-                    if (cell.content.needs?.includes('shade') && neighborCrops.some(nc => nc.provides?.includes('shade'))) boost += 1;
-                    if (isDrought && !neighborCrops.some(nc => nc.provides?.includes('ground_cover'))) boost -= 2;
+                    if (neighborContents.some(nc => nc.provides?.includes('nitrogen'))) boost += 1;
+                    if (cell.content.needs?.includes('shade') && neighborContents.some(nc => nc.provides?.includes('shade'))) boost += 1;
+                    if (isDrought && !neighborContents.some(nc => nc.provides?.includes('ground_cover'))) boost -= 2;
 
-                    const nextAge = cell.content.age + boost;
+                    const nextAge = (cell.content.age || 0) + boost;
                     return { ...cell, content: { ...cell.content, age: Math.max(0, nextAge), isMature: nextAge >= cell.content.growth } };
                 });
 
-                setGrid(newGrid); setMonth(nm); setYear(ny); setAp(10);
-                addLog(`進入 ${ny} 年 ${nm} 月，體力已恢復。`);
-                if (isDrought) addLog("⚠️ 乾旱襲來！請檢查地被覆蓋。");
+                setGrid(newGrid);
+                setMonth(nm);
+                setYear(ny);
+                
+                // 獎勵體力：穩定度高時恢復更多
+                const recovery = stability >= 60 ? 15 : 10;
+                setAp(Math.min(20, ap + recovery)); 
+                
+                addLog(`進入 ${ny} 年 ${nm} 月。恢復了 ${recovery} 點體力。`);
+                if (stability >= 60) addLog("✨ 系統穩定：體力恢復加成！");
+                if (isDrought) addLog("⚠️ 乾旱襲來！地被植物保護了土壤。");
             };
 
             const addLog = (msg) => setLogs(prev => [msg, ...prev].slice(0, 8));
@@ -99,12 +130,12 @@
             const handleCellClick = (i) => {
                 const cell = grid[i];
                 if (ap <= 0) { addLog("❌ 體力不足！"); return; }
+                
                 if (!cell.content || cell.content.isWeed) {
                     const crop = CROPS[selectedCrop];
                     if (money < crop.cost) { addLog("💰 資金不足！"); return; }
                     if (crop.soil_pref && crop.soil_pref !== cell.type) {
-                        addLog(`⚠️ ${crop.name} 需要${cell.type === 'wetland' ? '濕地' : '特殊土地'}！`);
-                        return;
+                        addLog(`⚠️ 土地不合！${crop.name}需要特定地形。`); return;
                     }
                     const newGrid = [...grid];
                     newGrid[i].content = { ...crop, age: 0, isMature: false };
@@ -113,69 +144,79 @@
                 } else if (cell.content.isMature) {
                     setMoney(m => m + (cell.content.money || 0));
                     setCarbon(c => c + cell.content.carbon);
-                    const newGrid = [...grid]; newGrid[i].content = null; setGrid(newGrid); setAp(a => a - 1);
-                    addLog(`🧺 收穫 ${cell.content.name}！`);
+                    const newGrid = [...grid];
+                    newGrid[i].content = null;
+                    setGrid(newGrid); setAp(a => a - 1);
+                    addLog(`🧺 收穫 ${cell.content.name}！碳匯提升。`);
                 }
             };
 
             return (
                 <div className="h-screen w-screen flex flex-col md:flex-row text-slate-800 relative">
-                    {/* 新手教學彈窗 */}
+                    {/* 教學與目標 */}
                     {showTutorial && (
                         <div className="tutorial-overlay fixed inset-0 flex items-center justify-center p-4">
-                            <div className="bg-white rounded-3xl p-8 max-w-2xl w-full animate-pop shadow-2xl">
-                                <h2 className="text-4xl font-black text-green-700 mb-6 flex items-center gap-2">🌿 如何打造食物森林？</h2>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 text-lg leading-relaxed">
-                                    <div className="space-y-4">
-                                        <p className="font-bold text-slate-600">土地屬性說明：</p>
-                                        <div className="flex items-center gap-3"><div className="w-8 h-8 bg-blue-100 border-2 border-blue-400 rounded"></div> <span><b>藍色(濕地)</b>：適合種芋頭</span></div>
-                                        <div className="flex items-center gap-3"><div className="w-8 h-8 bg-orange-100 border-2 border-orange-400 rounded"></div> <span><b>橘色(石礫)</b>：挑戰性地形</span></div>
-                                        <div className="flex items-center gap-3"><div className="w-8 h-8 bg-white/60 border-2 border-slate-200 rounded"></div> <span><b>一般</b>：適合大部分作物</span></div>
-                                    </div>
-                                    <div className="space-y-4">
-                                        <p className="font-bold text-slate-600">共生規則：</p>
-                                        <ul className="list-disc list-inside">
-                                            <li><b>樹豆</b>：提供氮肥，加速周邊生長</li>
-                                            <li><b>大樹</b>：提供遮蔭，薑黃長更快</li>
-                                            <li><b>地瓜葉</b>：覆蓋土地，抵抗乾旱</li>
-                                        </ul>
-                                    </div>
+                            <div className="bg-white rounded-[3rem] p-10 max-w-2xl w-full animate-pop shadow-2xl border-4 border-green-500">
+                                <h2 className="text-4xl font-black text-green-700 mb-4 flex items-center gap-2">🎯 終極任務：打造自律森林</h2>
+                                
+                                <div className="mb-8 p-6 bg-green-50 rounded-3xl border-2 border-green-200">
+                                    <p className="text-xl text-slate-700 font-bold mb-3">
+                                        建立一個 <span className="text-green-600 underline">不再需要你</span> 也能穩定運行的生態系：
+                                    </p>
+                                    <ul className="space-y-2 text-base text-slate-600 font-bold">
+                                        <li>✅ <span className="text-amber-600">自動調節：</span> 種植地瓜葉可自動清除周邊雜草。</li>
+                                        <li>✅ <span className="text-blue-600">系統獎勵：</span> 穩定度 &gt; 60% 時，每月恢復體力提升至 15。</li>
+                                        <li>✅ <span className="text-emerald-700">共生連結：</span> 大樹遮蔭薑黃、樹豆提供氮肥。</li>
+                                    </ul>
                                 </div>
-                                <button onClick={() => setShowTutorial(false)} className="w-full bg-green-600 hover:bg-green-700 text-white py-4 rounded-2xl text-2xl font-black shadow-lg">開始模擬 🚀</button>
+
+                                <button onClick={() => setShowTutorial(false)} className="w-full bg-green-600 hover:bg-green-700 text-white py-5 rounded-2xl text-3xl font-black shadow-lg transition-transform active:scale-95">
+                                    開始建立生態系 🚀
+                                </button>
                             </div>
                         </div>
                     )}
 
-                    {/* 左側面板 - 標題加大 */}
+                    {/* 左面板 */}
                     <aside className="w-full md:w-96 glass-panel border-b md:border-r flex flex-col shadow-2xl z-10">
-                        <div className="p-8 bg-gradient-to-br from-green-800 to-emerald-950 text-white">
-                            <h1 className="text-5xl font-black mb-2 tracking-tighter">食物森林</h1>
-                            <p className="text-green-300 text-sm font-bold tracking-[0.2em] opacity-80">FOOD FOREST SIMULATOR</p>
+                        <div className="p-8 bg-gradient-to-br from-green-900 to-black text-white">
+                            <h1 className="text-5xl font-black mb-1 tracking-tighter italic">食物森林</h1>
+                            <p className="text-green-400 text-sm font-bold tracking-[0.3em] opacity-80 uppercase">Autonomous Ecosystem</p>
                         </div>
-                        <div className="p-6 grid grid-cols-3 md:grid-cols-1 gap-4">
-                            <div className="bg-white p-4 rounded-2xl shadow-sm border-2 border-slate-100">
-                                <div className="text-sm font-bold text-slate-400">資金可用</div>
-                                <div className="text-3xl font-black text-amber-600">${money}</div>
+                        
+                        <div className="p-6 space-y-4">
+                            <div className="bg-white p-4 rounded-2xl border-2 border-slate-100 shadow-sm">
+                                <div className="flex justify-between items-center mb-1">
+                                    <span className="text-xs font-black text-slate-400 uppercase">系統穩定度</span>
+                                    <span className="text-lg font-black text-green-600">{stability}%</span>
+                                </div>
+                                <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden">
+                                    <div className="h-full bg-green-500 progress-bar" style={{ width: `${stability}%` }}></div>
+                                </div>
+                                <p className="text-[10px] text-slate-400 mt-2">※ 達 60% 觸發「自律加成」</p>
                             </div>
-                            <div className="bg-white p-4 rounded-2xl shadow-sm border-2 border-slate-100">
-                                <div className="text-sm font-bold text-slate-400">總碳匯量</div>
-                                <div className="text-3xl font-black text-green-700">{carbon}</div>
-                            </div>
-                            <div className="bg-white p-4 rounded-2xl shadow-sm border-2 border-slate-100">
-                                <div className="text-sm font-bold text-slate-400">天氣: <span className="text-red-500">{weather}</span></div>
-                                <div className="text-xl font-black">Y{year} M{month}</div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="bg-white p-3 rounded-2xl border border-slate-100">
+                                    <div className="text-[10px] font-bold text-slate-400">資金</div>
+                                    <div className="text-2xl font-black text-amber-600">${money}</div>
+                                </div>
+                                <div className="bg-white p-3 rounded-2xl border border-slate-100">
+                                    <div className="text-[10px] font-bold text-slate-400">總碳匯</div>
+                                    <div className="text-2xl font-black text-green-700">{carbon}</div>
+                                </div>
                             </div>
                         </div>
+
                         <div className="flex-1 overflow-y-auto p-6 hidden md:block">
-                            <p className="text-xs font-black text-slate-400 mb-4 tracking-widest uppercase">選擇作物層次</p>
                             <div className="space-y-3">
                                 {Object.values(CROPS).map(crop => (
                                     <button key={crop.id} onClick={() => setSelectedCrop(crop.id)}
-                                        className={`w-full p-4 rounded-2xl border-4 transition-all flex items-center gap-4 ${selectedCrop === crop.id ? 'border-green-600 bg-green-50 scale-[1.02]' : 'border-transparent bg-white hover:bg-slate-50'}`}>
+                                        className={`w-full p-4 rounded-2xl border-4 transition-all flex items-center gap-4 ${selectedCrop === crop.id ? 'border-green-600 bg-green-50 scale-[1.02]' : 'border-transparent bg-white'}`}>
                                         <span className="text-4xl">{crop.icon}</span>
                                         <div className="text-left">
                                             <div className="font-black text-lg leading-tight">{crop.name}</div>
-                                            <div className="text-xs font-bold text-slate-400 mt-1">成本: ${crop.cost} | {crop.desc}</div>
+                                            <div className="text-[10px] font-bold text-slate-400">{crop.desc}</div>
                                         </div>
                                     </button>
                                 ))}
@@ -183,28 +224,27 @@
                         </div>
                     </aside>
 
-                    {/* 中央農場 */}
+                    {/* 農場中央區 */}
                     <main className="flex-1 flex flex-col p-6 items-center justify-center bg-[#e8ede8] relative">
-                        <div className="w-full max-w-lg mb-8">
+                        <div className="w-full max-w-lg mb-6">
                             <div className="flex justify-between items-end mb-2 font-black">
-                                <span className="text-xl text-slate-600">⚡ 體力 (AP)</span>
-                                <span className="text-2xl text-blue-600">{ap} / 10</span>
+                                <span className="text-xl text-slate-600">⚡ 能量(AP)</span>
+                                <span className="text-2xl text-blue-600">{ap} / 20</span>
                             </div>
-                            <div className="h-4 w-full bg-slate-200 rounded-full overflow-hidden shadow-inner">
-                                <div className="h-full bg-blue-500 progress-bar shadow-[0_0_10px_rgba(59,130,246,0.5)]" style={{ width: `${ap * 10}%` }}></div>
+                            <div className="h-4 w-full bg-slate-200 rounded-full overflow-hidden shadow-inner border-2 border-white">
+                                <div className="h-full bg-blue-500 progress-bar" style={{ width: `${(ap / 20) * 100}%` }}></div>
                             </div>
                         </div>
 
                         <div className="farm-grid">
                             {grid.map((cell, i) => (
                                 <div key={i} onClick={() => handleCellClick(i)}
-                                    className={`cell-aspect rounded-2xl cursor-pointer flex flex-col items-center justify-center relative shadow-md
+                                    className={`cell-aspect rounded-2xl cursor-pointer flex flex-col items-center justify-center relative shadow-md transition-all active:scale-90
                                     ${cell.type === 'gravel' ? 'border-orange-400 bg-orange-50' : cell.type === 'wetland' ? 'border-blue-400 bg-blue-50' : 'border-white bg-white/60 hover:bg-white'}`}>
                                     
-                                    {/* 土地屬性標籤 */}
                                     {!cell.content && (
-                                        <div className="text-[10px] font-black opacity-30 uppercase tracking-tighter">
-                                            {cell.type === 'gravel' ? '石礫地' : cell.type === 'wetland' ? '濕地' : ''}
+                                        <div className="text-[10px] font-black opacity-20 uppercase tracking-tighter">
+                                            {cell.type === 'gravel' ? '石礫' : cell.type === 'wetland' ? '濕地' : ''}
                                         </div>
                                     )}
 
@@ -224,29 +264,22 @@
                             ))}
                         </div>
 
-                        <button onClick={handleNextMonth} className="mt-10 w-full max-w-lg bg-slate-900 text-white py-6 rounded-3xl font-black text-2xl shadow-2xl hover:bg-black active:scale-95 transition-all">
-                            📅 下個月 (體力恢復)
+                        <button onClick={handleNextMonth} className="mt-8 w-full max-w-lg bg-slate-900 text-white py-6 rounded-3xl font-black text-2xl shadow-2xl hover:bg-black active:scale-95 transition-all">
+                            📅 進入下個月
                         </button>
-
-                        {/* 手機版快速選單 */}
-                        <div className="md:hidden flex gap-2 overflow-x-auto w-full mt-6 pb-2">
-                                {Object.values(CROPS).map(crop => (
-                                    <button key={crop.id} onClick={() => setSelectedCrop(crop.id)} className={`flex-shrink-0 px-4 py-2 rounded-2xl border-2 font-bold ${selectedCrop === crop.id ? 'bg-green-700 text-white' : 'bg-white'}`}>
-                                        {crop.icon} {crop.name}
-                                    </button>
-                                ))}
-                        </div>
                     </main>
 
-                    {/* 右下角日誌 - 加大且更明顯 */}
+                    {/* 右下角日誌 */}
                     <div className="fixed bottom-6 right-6 w-80 pointer-events-none z-50">
-                        <div className="bg-slate-900/90 backdrop-blur-md p-6 rounded-3xl shadow-2xl border-2 border-white/20">
-                            <p className="text-white/40 text-[10px] font-black mb-2 tracking-widest uppercase">系統日誌 System Logs</p>
-                            {logs.map((log, i) => (
-                                <div key={i} className={`text-sm md:text-base font-bold mb-1 animate-pop ${log.includes('❌') || log.includes('⚠️') ? 'text-red-400' : 'text-green-400'}`}>
-                                    • {log}
-                                </div>
-                            ))}
+                        <div className="bg-slate-900/95 backdrop-blur-md p-6 rounded-[2rem] shadow-2xl border-2 border-white/20">
+                            <p className="text-white/40 text-[10px] font-black mb-3 tracking-widest uppercase">系統狀態日誌</p>
+                            <div className="space-y-2">
+                                {logs.map((log, i) => (
+                                    <div key={i} className={`text-sm md:text-base font-bold animate-pop leading-tight ${log.includes('✨') ? 'text-yellow-300' : (log.includes('❌') || log.includes('⚠️') ? 'text-red-400' : 'text-green-400')}`}>
+                                        • {log}
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     </div>
                 </div>
