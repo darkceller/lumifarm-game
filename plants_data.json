@@ -1,0 +1,175 @@
+{
+  "version": "1.0",
+  "provider": "Food Forest Game Dev Kit",
+  "layers_definition": {
+    "1": "冠層 (Canopy) - 高大果樹",
+    "2": "低矮樹層 (Low Tree) - 矮化果樹或大灌木",
+    "3": "灌木層 (Shrub) - 漿果類",
+    "4": "草本層 (Herbaceous) - 蔬菜與香草",
+    "5": "地被層 (Ground Cover) - 覆蓋地面的植物",
+    "6": "地下層 (Rhizosphere) - 根莖類食物",
+    "7": "攀援層 (Vertical/Climber) - 爬藤植物"
+  },
+  "plants": [
+    {
+      "id": "mango_01",
+      "name": "芒果",
+      "layer": 1,
+      "attributes": { "light": "全日照", "water": "中", "growth_rate": "中" },
+      "functions": ["主食果實", "遮蔭提供"],
+      "guild_bonus": "為層次2與層次4提供必要遮蔭"
+    },
+    {
+      "id": "mulberry_01",
+      "name": "桑葚",
+      "layer": 2,
+      "attributes": { "light": "半日照/全日照", "water": "中", "growth_rate": "快" },
+      "functions": ["漿果", "誘鳥植物"],
+      "guild_bonus": "落葉可轉化為覆蓋物(Mulch)"
+    },
+    {
+      "id": "pigeon_pea_01",
+      "name": "樹豆",
+      "layer": 3,
+      "attributes": { "light": "全日照", "water": "低", "growth_rate": "快" },
+      "functions": ["固氮植物", "蛋白質食物"],
+      "guild_bonus": "提升周圍1公尺內植物的生長速度(氮肥)"
+    },
+    {
+      "id": "lemon_01",
+      "name": "香水檸檬",
+      "layer": 2,
+      "attributes": { "light": "全日照", "water": "中", "growth_rate": "中" },
+      "functions": ["維生素C", "精油來源"],
+      "guild_bonus": "其香氣可輕微干擾害蟲"
+    },
+    {
+      "id": "basil_01",
+      "name": "九層塔",
+      "layer": 4,
+      "attributes": { "light": "全日照", "water": "中", "growth_rate": "快" },
+      "functions": ["香草", "吸引蜜蜂"],
+      "guild_bonus": "開花時大幅提升區域內植物受粉率"
+    },
+    {
+      "id": "turmeric_01",
+      "name": "薑黃",
+      "layer": 6,
+      "attributes": { "light": "耐陰", "water": "高", "growth_rate": "慢" },
+      "functions": ["藥用", "香料"],
+      "guild_bonus": "利用樹蔭下的閒置地下空間"
+    },
+    {
+      "id": "sweet_potato_01",
+      "name": "地瓜葉",
+      "layer": 5,
+      "attributes": { "light": "半日照", "water": "中", "growth_rate": "極快" },
+      "functions": ["地被覆蓋", "葉菜類"],
+      "guild_bonus": "防止雜草生長，保持土壤濕度"
+    },
+    {
+      "id": "passion_fruit_01",
+      "name": "百香果",
+      "layer": 7,
+      "attributes": { "light": "全日照", "water": "中", "growth_rate": "快" },
+      "functions": ["水果", "垂直空間利用"],
+      "guild_bonus": "可沿著層次1的樹幹攀爬，不佔地面空間"
+    },
+    {
+      "id": "banana_01",
+      "name": "北蕉",
+      "layer": 2,
+      "attributes": { "light": "全日照", "water": "高", "growth_rate": "快" },
+      "functions": ["高熱量主食", "生物量製造機"],
+      "guild_bonus": "巨大的葉片是極佳的天然有機肥來源"
+    },
+    {
+      "id": "comfrey_01",
+      "name": "聚合草(康復力)",
+      "layer": 4,
+      "attributes": { "light": "半日照", "water": "中", "growth_rate": "中" },
+      "functions": ["動態蓄積者(活肥料)", "藥用"],
+      "guild_bonus": "深根能將地下礦物質帶到地表供其他植物使用"
+    },
+    {
+      "id": "papaya_01",
+      "name": "木瓜",
+      "layer": 2,
+      "attributes": { "light": "全日照", "water": "中", "growth_rate": "快" },
+      "functions": ["水果", "酵素來源"],
+      "guild_bonus": "垂直生長不佔橫向遮蔭空間"
+    },
+    {
+      "id": "guava_01",
+      "name": "芭樂",
+      "layer": 2,
+      "attributes": { "light": "全日照", "water": "低", "growth_rate": "中" },
+      "functions": ["高維他命水果"],
+      "guild_bonus": "耐旱性強，可作為邊界防風"
+    },
+    {
+      "id": "mint_01",
+      "name": "薄荷",
+      "layer": 5,
+      "attributes": { "light": "耐陰", "water": "高", "growth_rate": "極快" },
+      "functions": ["地被", "驅蟲香草"],
+      "guild_bonus": "散發氣味嚇跑特定害蟲"
+    },
+    {
+      "id": "pineapple_01",
+      "name": "鳳梨",
+      "layer": 3,
+      "attributes": { "light": "全日照", "water": "低", "growth_rate": "慢" },
+      "functions": ["水果", "耐旱植物"],
+      "guild_bonus": "適合種植在森林邊緣較乾燥處"
+    },
+    {
+      "id": "taro_01",
+      "name": "芋頭",
+      "layer": 6,
+      "attributes": { "light": "耐陰", "water": "極高", "growth_rate": "中" },
+      "functions": ["根莖主食"],
+      "guild_bonus": "適合種植在森林中最潮濕的低窪處"
+    },
+    {
+      "id": "aloe_01",
+      "name": "蘆薈",
+      "layer": 4,
+      "attributes": { "light": "全日照", "water": "極低", "growth_rate": "慢" },
+      "functions": ["藥用", "保濕"],
+      "guild_bonus": "生長所需養分極低，適合貧瘠角落"
+    },
+    {
+      "id": "chili_01",
+      "name": "辣椒",
+      "layer": 3,
+      "attributes": { "light": "全日照", "water": "中", "growth_rate": "中" },
+      "functions": ["香料", "生物農藥來源"],
+      "guild_bonus": "可製作天然防蟲劑"
+    },
+    {
+      "id": "loquat_01",
+      "name": "枇杷",
+      "layer": 2,
+      "attributes": { "light": "半日照", "water": "中", "growth_rate": "慢" },
+      "functions": ["水果", "藥用"],
+      "guild_bonus": "冬季開花，為冬眠甦醒的昆蟲提供食物"
+    },
+    {
+      "id": "grape_01",
+      "name": "葡萄",
+      "layer": 7,
+      "attributes": { "light": "全日照", "water": "中", "growth_rate": "中" },
+      "functions": ["水果"],
+      "guild_bonus": "夏季提供濃密遮蔭，冬季落葉增加光照"
+    },
+    {
+      "id": "pumpkin_01",
+      "name": "南瓜",
+      "layer": 5,
+      "attributes": { "light": "全日照", "water": "中", "growth_rate": "快" },
+      "functions": ["主食", "地被"],
+      "guild_bonus": "大葉片能有效壓制雜草生長"
+    }
+  ]
+}
