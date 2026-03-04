@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>食物森林：100% 生態挑戰賽</title>
+    <title>趨合森林：演替模擬器 Syntropy Pro</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -12,15 +12,14 @@
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap');
-        body { font-family: 'Noto Sans TC', sans-serif; background-color: #f0f2f0; margin: 0; overflow: hidden; }
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: #1a1c1a; color: #e2e8f0; margin: 0; overflow: hidden; }
         .farm-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; width: 100%; max-width: 650px; }
-        .cell-aspect { aspect-ratio: 1 / 1; transition: all 0.2s; border-width: 3px; }
-        .glass-panel { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); }
-        @keyframes popIn { 0% { transform: scale(0.9); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
-        .animate-pop { animation: popIn 0.3s ease-out; }
-        .tutorial-overlay { background: rgba(0,0,0,0.9); z-index: 100; }
-        .victory-overlay { background: rgba(0, 100, 0, 0.95); z-index: 200; }
+        .cell-aspect { aspect-ratio: 1 / 1; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); border-width: 2px; }
+        .glass-panel { background: rgba(30, 41, 30, 0.8); backdrop-filter: blur(12px); border-color: rgba(255,255,255,0.1); }
+        @keyframes pulse-green { 0% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.7); } 70% { box-shadow: 0 0 0 15px rgba(74, 222, 128, 0); } 100% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0); } }
+        .pulse-active { animation: pulse-green 0.6s ease-out; }
         .progress-bar { transition: width 0.8s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        .tutorial-overlay { background: rgba(0,0,0,0.92); z-index: 100; }
     </style>
 </head>
 <body>
@@ -30,40 +29,38 @@
         const { useState, useEffect } = React;
 
         const CROPS = {
-            mango: { id: 'mango', name: '芒果(冠層)', icon: '🌳', cost: 80, carbon: 100, growth: 18, provides: ['shade'], layer: '1', desc: '巨型雨傘：為下層植物擋住烈日' },
-            banana: { id: 'banana', name: '香蕉(低木)', icon: '🍌', cost: 40, carbon: 30, growth: 8, provides: ['moisture'], layer: '2', desc: '蓄水水庫：讓土壤保持濕潤' },
-            pigeonPea: { id: 'pigeonPea', name: '樹豆(灌木)', icon: '🌿', cost: 20, carbon: 15, growth: 4, provides: ['nitrogen'], layer: '3', desc: '天然肥料：免費讓周圍植物長更快' },
-            sweetPotato: { id: 'sweetPotato', name: '地瓜葉(地被)', icon: '🍃', cost: 10, carbon: 5, growth: 2, provides: ['ground_cover'], layer: '5', desc: '活體護蓋：蓋住土地，雜草就長不出來' },
-            ginger: { id: 'ginger', name: '薑黃(地下)', icon: '🍠', cost: 15, carbon: 10, growth: 6, needs: ['shade'], layer: '6', money: 120, desc: '害羞植物：喜歡躲在大樹影下生長' },
-            taro: { id: 'taro', name: '芋頭(地下)', icon: '🥔', cost: 20, carbon: 10, growth: 5, soil_pref: 'wetland', layer: '6', money: 150, desc: '愛水植物：一定要種在藍色區域' }
+            mango: { id: 'mango', name: '芒果 (胎積期)', icon: '🌳', cost: 200, syntropy: 100, growth: 25, provides: ['shade'], minSyntropy: 40, desc: '頂層優勢種：需在演替中後期種植', biomass: 80, permanent: true },
+            banana: { id: 'banana', name: '香蕉 (蓄水)', icon: '🍌', cost: 100, syntropy: 30, growth: 12, provides: ['moisture'], minSyntropy: 15, desc: '生物量工廠：提供大量有機質', biomass: 40, permanent: true },
+            pigeonPea: { id: 'pigeonPea', name: '樹豆 (固氮)', icon: '🌿', cost: 40, syntropy: 15, growth: 6, provides: ['nitrogen'], minSyntropy: 0, desc: '先驅修復種：改善土壤氮素', biomass: 20, permanent: true },
+            sweetPotato: { id: 'sweetPotato', name: '地瓜葉 (覆蓋)', icon: '🍃', cost: 20, syntropy: 5, growth: 3, provides: ['ground_cover'], minSyntropy: 0, desc: '地表守護者：壓制雜草，保持熵減', biomass: 10, permanent: true },
+            ginger: { id: 'ginger', name: '薑黃 (耐陰)', icon: '🍠', cost: 30, syntropy: 20, growth: 8, needs: ['shade'], minSyntropy: 20, desc: '演替伴生種：需在大樹遮蔭下', biomass: 180, permanent: false }
         };
 
         function App() {
             const [showTutorial, setShowTutorial] = useState(true);
             const [isVictory, setIsVictory] = useState(false);
-            const [money, setMoney] = useState(2000);
-            const [carbon, setCarbon] = useState(0);
+            const [biomass, setBiomass] = useState(2000); // 資金更名為生物量
+            const [syntropy, setSyntropy] = useState(0);  // 碳匯更名為熵減值
             const [year, setYear] = useState(1);
             const [month, setMonth] = useState(1);
             const [ap, setAp] = useState(10);
-            const [weather, setWeather] = useState('正常');
-            const [stability, setStability] = useState(0);
+            const [pulseIndex, setPulseIndex] = useState(null);
             
             const [grid, setGrid] = useState(() => 
                 Array(36).fill(null).map(() => ({
                     content: null,
-                    type: Math.random() > 0.85 ? 'gravel' : (Math.random() < 0.1 ? 'wetland' : 'normal')
+                    type: Math.random() > 0.9 ? 'gravel' : 'normal'
                 }))
             );
             
-            const [selectedCrop, setSelectedCrop] = useState('mango');
-            const [logs, setLogs] = useState(['挑戰開始！請達成 100% 穩定度。']);
+            const [selectedCrop, setSelectedCrop] = useState('pigeonPea');
+            const [logs, setLogs] = useState(['趨合演替開始：請先種植先驅植物。']);
 
+            // 計算系統穩定度 (熵減程度)
             useEffect(() => {
                 const activeTypes = new Set(grid.filter(c => c.content && !c.content.isWeed).map(c => c.content.id));
-                const score = Math.round((activeTypes.size / Object.keys(CROPS).size) * 100);
-                setStability(score);
-                if (score >= 100) setIsVictory(true);
+                const diversityScore = Math.round((activeTypes.size / Object.keys(CROPS).size) * 100);
+                if (diversityScore >= 100) setIsVictory(true);
             }, [grid]);
 
             const getNeighbors = (index) => {
@@ -81,202 +78,217 @@
             const handleNextMonth = () => {
                 let nm = month + 1, ny = year;
                 if (nm > 12) { nm = 1; ny++; }
-                const isDrought = Math.random() > 0.85;
-                setWeather(isDrought ? '☀️ 嚴重乾旱' : '正常');
-
+                
                 const newGrid = grid.map((cell, i) => {
                     const neighbors = getNeighbors(i);
                     const neighborContents = neighbors.map(ni => grid[ni].content).filter(Boolean);
+                    
                     if (cell.content?.isWeed) {
                         if (neighborContents.some(nc => nc.provides?.includes('ground_cover'))) return { ...cell, content: null };
                         return cell; 
                     }
                     if (!cell.content) {
-                        if (Math.random() > 0.94) return { ...cell, content: { name: '雜草', icon: '🌾', isWeed: true } };
+                        if (Math.random() > 0.96) return { ...cell, content: { name: '雜草', icon: '🌾', isWeed: true } };
                         return cell;
                     }
+
                     let boost = 1;
                     if (neighborContents.some(nc => nc.provides?.includes('nitrogen'))) boost += 1;
                     if (cell.content.needs?.includes('shade') && neighborContents.some(nc => nc.provides?.includes('shade'))) boost += 1;
-                    if (isDrought && !neighborContents.some(nc => nc.provides?.includes('ground_cover'))) boost -= 2;
+                    
                     const nextAge = (cell.content.age || 0) + boost;
                     return { ...cell, content: { ...cell.content, age: Math.max(0, nextAge), isMature: nextAge >= cell.content.growth } };
                 });
 
                 setGrid(newGrid); setMonth(nm); setYear(ny);
-                const recovery = stability >= 60 ? 15 : 10;
-                setAp(Math.min(20, ap + recovery)); 
-                addLog(`進入 ${ny} 年 ${nm} 月。`);
-            };
-
-            const addLog = (msg) => setLogs(prev => [msg, ...prev].slice(0, 8));
-
-            const resetGame = () => {
-                setMoney(2000); setCarbon(0); setYear(1); setMonth(1); setAp(10);
-                setGrid(Array(36).fill(null).map(() => ({
-                    content: null,
-                    type: Math.random() > 0.85 ? 'gravel' : (Math.random() < 0.1 ? 'wetland' : 'normal')
-                })));
-                setIsVictory(false);
-                setShowTutorial(true);
-                addLog('挑戰重新開始！');
+                setAp(Math.min(20, ap + 10)); 
+                addLog(`進入 ${ny} 年 ${nm} 月。能量已補充。`);
             };
 
             const handleCellClick = (i) => {
                 const cell = grid[i];
-                if (ap <= 0) { addLog("❌ 體力耗盡，請點擊下個月。"); return; }
+                if (ap <= 0) return;
+                
                 if (!cell.content || cell.content.isWeed) {
                     const crop = CROPS[selectedCrop];
-                    if (money < crop.cost) { addLog("💰 資金不足！"); return; }
-                    if (crop.soil_pref && crop.soil_pref !== cell.type) {
-                        addLog(`⚠️ ${crop.name}需要濕地。`); return;
+                    if (biomass < crop.cost) { addLog("⚠️ 生物量不足以啟動演替！"); return; }
+                    if (syntropy < (crop.minSyntropy || 0)) {
+                        addLog(`⚠️ 土壤熵減值不足！${crop.name} 需要更多先驅植物改良。`); return;
                     }
+                    
                     const newGrid = [...grid];
                     newGrid[i].content = { ...crop, age: 0, isMature: false };
-                    setGrid(newGrid); setMoney(m => m - crop.cost); setAp(a => a - 1);
-                    addLog(`🌱 種下 ${crop.name}。`);
-                } else if (cell.content.isMature) {
-                    setMoney(m => m + (cell.content.money || 0));
-                    setCarbon(c => c + cell.content.carbon);
-                    const newGrid = [...grid]; newGrid[i].content = null; setGrid(newGrid); setAp(a => a - 1);
-                    addLog(`🧺 收穫 ${cell.content.name}！`);
+                    setGrid(newGrid); setBiomass(b => b - crop.cost); setAp(a => a - 1);
+                    addLog(`🌱 啟動演替：種下 ${crop.name}`);
+                } 
+                else if (cell.content.isMature) {
+                    // 修枝脈衝邏輯 (Pruning Pulse)
+                    const bonusBiomass = cell.content.biomass || 0;
+                    setBiomass(b => b + bonusBiomass);
+                    setSyntropy(s => s + (cell.content.syntropy || 0));
+                    
+                    // 觸發周圍生長脈衝
+                    setPulseIndex(i);
+                    setTimeout(() => setPulseIndex(null), 600);
+                    
+                    const neighbors = getNeighbors(i);
+                    const newGrid = [...grid];
+                    
+                    neighbors.forEach(ni => {
+                        if (newGrid[ni].content && !newGrid[ni].content.isMature) {
+                            newGrid[ni].content.age += 5; // 修枝脈衝加速周圍生長
+                        }
+                    });
+
+                    if (cell.content.permanent) {
+                        newGrid[i].content = { ...cell.content, age: 0, isMature: false };
+                        addLog(`✂️ 修枝脈衝：釋放生物量並刺激周邊生長！`);
+                    } else {
+                        newGrid[i].content = null;
+                        addLog(`🧺 演替循環：收穫地下質並還原空間。`);
+                    }
+                    setGrid(newGrid); setAp(a => a - 1);
                 }
             };
 
+            const addLog = (msg) => setLogs(prev => [msg, ...prev].slice(0, 8));
+
             return (
-                <div className="h-screen w-screen flex flex-col md:flex-row text-slate-800 relative">
+                <div className="h-screen w-screen flex flex-col md:flex-row relative bg-[#0d0f0d]">
                     
-                    {/* 勝利結算畫面 */}
+                    {/* 勝利畫面 */}
                     {isVictory && (
                         <div className="victory-overlay fixed inset-0 flex items-center justify-center p-4">
-                            <div className="bg-white rounded-[3rem] p-10 md:p-16 max-w-2xl w-full animate-pop shadow-2xl text-center">
-                                <span className="text-8xl mb-6 block">🏆</span>
-                                <h2 className="text-5xl font-black text-green-800 mb-4">挑戰成功！</h2>
-                                <p className="text-2xl text-slate-600 font-bold mb-8 italic">
-                                    你打造了一座完美的自律森林！
-                                </p>
-                                <div className="bg-green-100 p-8 rounded-[2rem] border-4 border-green-200 mb-10">
-                                    <p className="text-xl font-bold text-green-700 uppercase tracking-widest mb-2">本次遊戲耗時</p>
-                                    <div className="text-6xl font-black text-green-900">
-                                        {year} <span className="text-2xl">年</span> {month} <span className="text-2xl">個月</span>
-                                    </div>
-                                </div>
-                                <button onClick={resetGame} className="w-full bg-green-700 hover:bg-green-800 text-white py-6 rounded-3xl text-3xl font-black shadow-lg transition-all active:scale-95">
-                                    再應戰一次 🔄
-                                </button>
+                            <div className="bg-[#1e291e] border-4 border-green-500 rounded-[3rem] p-12 max-w-2xl w-full text-center">
+                                <h2 className="text-5xl font-black text-green-400 mb-4 text-shadow-glow">演替達成！</h2>
+                                <p className="text-xl text-slate-400 mb-8">你成功引導土地進入「豐盛階段」。</p>
+                                <div className="text-6xl font-black text-white mb-10">{year} <span className="text-2xl">Y</span> {month} <span className="text-2xl">M</span></div>
+                                <button onClick={() => window.location.reload()} className="w-full bg-green-600 py-6 rounded-3xl text-2xl font-black text-white">重啟演替循環 🔄</button>
                             </div>
                         </div>
                     )}
 
-                    {/* 教學導覽 */}
                     {showTutorial && (
                         <div className="tutorial-overlay fixed inset-0 flex items-center justify-center p-4">
-                            <div className="bg-white rounded-[2.5rem] p-8 md:p-12 max-w-3xl w-full animate-pop shadow-2xl">
-                                <h2 className="text-4xl font-black text-green-700 mb-6 text-center">任務：達成 100% 穩定度</h2>
-                                <div className="space-y-6 text-lg text-slate-700">
-                                    <div className="bg-amber-50 p-6 rounded-3xl border-2 border-amber-200">
-                                        <h3 className="font-black text-amber-800 mb-2">🎯 目標說明</h3>
-                                        <p>你的目標是在土地上種植**所有層次**的植物，讓系統達成 100% 穩定。我們將記錄你達成這個目標需要花費多少時間！</p>
+                            <div className="bg-[#1e291e] border-2 border-green-900/50 rounded-[3rem] p-10 max-w-3xl w-full">
+                                <h2 className="text-3xl font-black text-green-400 mb-6 text-center italic">什麼是趨合農法？ (Syntropy)</h2>
+                                <div className="space-y-4 text-slate-300">
+                                    <div className="bg-green-950/50 p-6 rounded-3xl border border-green-800">
+                                        <h3 className="text-green-300 font-bold mb-2">⚡ 修枝脈衝 (Pruning Pulse)</h3>
+                                        <p className="text-sm">在趨合農法中，修剪不只是為了收成。當你點擊「成熟」植物，會觸發**生長脈衝**，瞬間加速周圍 8 格植物的生長！</p>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-4 text-center font-bold">
-                                        <div className="p-4 bg-green-50 rounded-2xl">⚡ 初始資金：$2000</div>
-                                        <div className="p-4 bg-blue-50 rounded-2xl">🔄 自律：地瓜葉可除草</div>
+                                    <div className="grid grid-cols-2 gap-4 text-sm font-bold">
+                                        <div className="p-4 bg-white/5 rounded-2xl">🌿 先種植先驅：累積土壤熵減值</div>
+                                        <div className="p-4 bg-white/5 rounded-2xl">🌳 後種植優勢：熵減值達標才可種植</div>
                                     </div>
+                                    <p className="text-center text-xs text-slate-500 mt-4 tracking-widest">能量不是被消耗，而是被組織化。目標：100% 熵減演替。</p>
                                 </div>
-                                <button onClick={() => setShowTutorial(false)} className="mt-8 w-full bg-green-600 text-white py-5 rounded-3xl text-3xl font-black">
-                                    開始計時挑戰 🚀
-                                </button>
+                                <button onClick={() => setShowTutorial(false)} className="mt-8 w-full bg-green-700 py-5 rounded-3xl text-2xl font-black text-white">進入演替現場 🚀</button>
                             </div>
                         </div>
                     )}
 
-                    <aside className="w-full md:w-96 glass-panel border-b md:border-r flex flex-col shadow-2xl z-10">
-                        <div className="p-8 bg-gradient-to-br from-green-900 to-black text-white">
-                            <h1 className="text-5xl font-black mb-1 tracking-tighter italic">食物森林</h1>
-                            <p className="text-green-400 text-sm font-bold tracking-[0.3em] opacity-80 uppercase italic">Time Challenge</p>
+                    <aside className="w-full md:w-96 glass-panel border-b md:border-r border-green-900/30 flex flex-col z-10">
+                        <div className="p-8 bg-gradient-to-br from-green-950 to-black">
+                            <h1 className="text-4xl font-black text-green-400 tracking-tighter italic uppercase">Syntropy</h1>
+                            <p className="text-[10px] text-green-700 font-black tracking-[0.4em]">趨合生態模擬器</p>
                         </div>
+                        
                         <div className="p-6 space-y-4">
-                            <div className="bg-white p-4 rounded-2xl border-2 border-slate-100 shadow-sm">
+                            <div className="bg-black/40 p-5 rounded-2xl border border-green-900/50">
                                 <div className="flex justify-between items-center mb-1">
-                                    <span className="text-xs font-black text-slate-400 uppercase">目標穩定度進度</span>
-                                    <span className="text-lg font-black text-green-600">{stability} / 100%</span>
+                                    <span className="text-[10px] font-black text-green-600 uppercase">土壤熵減值 (Syntropy)</span>
+                                    <span className="text-lg font-black text-green-400">{syntropy}</span>
                                 </div>
-                                <div className="h-4 w-full bg-slate-100 rounded-full overflow-hidden">
-                                    <div className="h-full bg-green-500 progress-bar" style={{ width: `${stability}%` }}></div>
+                                <div className="h-2 w-full bg-green-950 rounded-full overflow-hidden">
+                                    <div className="h-full bg-green-400 progress-bar" style={{ width: `${Math.min(100, (syntropy/200)*100)}%` }}></div>
                                 </div>
                             </div>
+
                             <div className="grid grid-cols-2 gap-3 text-center">
-                                <div className="bg-white p-3 rounded-2xl border border-slate-100">
-                                    <div className="text-[10px] font-bold text-slate-400 uppercase">目前資金</div>
-                                    <div className="text-2xl font-black text-amber-600">${money}</div>
+                                <div className="bg-black/40 p-3 rounded-2xl border border-white/5">
+                                    <div className="text-[10px] font-bold text-slate-500 uppercase">現存生物量</div>
+                                    <div className="text-2xl font-black text-amber-500">{biomass}</div>
                                 </div>
-                                <div className="bg-white p-3 rounded-2xl border border-slate-100">
-                                    <div className="text-[10px] font-bold text-slate-400 uppercase">總經過時間</div>
-                                    <div className="text-lg font-black">Y{year} M{month}</div>
+                                <div className="bg-black/40 p-3 rounded-2xl border border-white/5">
+                                    <div className="text-[10px] font-bold text-slate-500 uppercase">演替時間</div>
+                                    <div className="text-lg font-black text-white italic">Y{year} M{month}</div>
                                 </div>
                             </div>
                         </div>
-                        <div className="flex-1 overflow-y-auto p-6 hidden md:block">
-                            <div className="space-y-3">
-                                {Object.values(CROPS).map(crop => (
-                                    <button key={crop.id} onClick={() => setSelectedCrop(crop.id)}
-                                        className={`w-full p-4 rounded-2xl border-4 transition-all flex items-center gap-4 ${selectedCrop === crop.id ? 'border-green-600 bg-green-50 scale-[1.02]' : 'border-transparent bg-white shadow-sm'}`}>
-                                        <span className="text-4xl">{crop.icon}</span>
-                                        <div className="text-left leading-tight">
-                                            <div className="font-black text-lg">{crop.name}</div>
-                                            <div className="text-[10px] font-bold text-slate-400">{crop.desc}</div>
-                                        </div>
-                                    </button>
-                                ))}
+
+                        <div className="flex-1 overflow-y-auto p-4 hidden md:block">
+                            <div className="space-y-2">
+                                {Object.values(CROPS).map(crop => {
+                                    const isLocked = syntropy < (crop.minSyntropy || 0);
+                                    return (
+                                        <button key={crop.id} onClick={() => !isLocked && setSelectedCrop(crop.id)}
+                                            className={`w-full p-4 rounded-2xl border-2 transition-all flex items-center gap-4 relative overflow-hidden
+                                            ${isLocked ? 'opacity-30 grayscale cursor-not-allowed border-transparent bg-white/5' : 
+                                            (selectedCrop === crop.id ? 'border-green-500 bg-green-500/10' : 'border-transparent bg-white/5 hover:bg-white/10')}`}>
+                                            <span className="text-3xl">{crop.icon}</span>
+                                            <div className="text-left leading-tight">
+                                                <div className="font-black text-white text-base">{crop.name}</div>
+                                                <div className="text-[9px] text-slate-400 mt-1">{crop.desc}</div>
+                                                {isLocked && <div className="text-[10px] font-black text-red-500 mt-1 uppercase tracking-tighter">需熵減值達 {crop.minSyntropy}</div>}
+                                            </div>
+                                        </button>
+                                    );
+                                })}
                             </div>
                         </div>
                     </aside>
 
-                    <main className="flex-1 flex flex-col p-6 items-center justify-center bg-[#e8ede8] relative">
-                        <div className="w-full max-w-lg mb-6">
+                    <main className="flex-1 flex flex-col p-6 items-center justify-center relative">
+                        {/* 能量槽 */}
+                        <div className="w-full max-w-lg mb-8">
                             <div className="flex justify-between items-end mb-2 font-black">
-                                <span className="text-xl text-slate-600">⚡ 能量(AP)</span>
-                                <span className="text-2xl text-blue-600">{ap} / 20</span>
+                                <span className="text-xs text-green-700 tracking-widest uppercase">運作能量 (AP)</span>
+                                <span className="text-xl text-green-400">{ap} / 20</span>
                             </div>
-                            <div className="h-4 w-full bg-slate-200 rounded-full overflow-hidden shadow-inner border-2 border-white">
-                                <div className="h-full bg-blue-500 progress-bar" style={{ width: `${(ap / 20) * 100}%` }}></div>
+                            <div className="h-2 w-full bg-green-950/30 rounded-full border border-green-900/50">
+                                <div className="h-full bg-green-500 progress-bar shadow-[0_0_15px_rgba(74,222,128,0.5)]" style={{ width: `${(ap / 20) * 100}%` }}></div>
                             </div>
                         </div>
 
                         <div className="farm-grid">
                             {grid.map((cell, i) => (
                                 <div key={i} onClick={() => handleCellClick(i)}
-                                    className={`cell-aspect rounded-2xl cursor-pointer flex flex-col items-center justify-center relative shadow-md transition-all active:scale-90
-                                    ${cell.type === 'gravel' ? 'border-orange-300 bg-orange-50' : cell.type === 'wetland' ? 'border-blue-400 bg-blue-50' : 'border-white bg-white/60 hover:bg-white'}`}>
-                                    {!cell.content && <div className="text-[8px] font-black opacity-10">{cell.type === 'gravel' ? 'GRAVEL' : cell.type === 'wetland' ? 'WETLAND' : ''}</div>}
+                                    className={`cell-aspect rounded-2xl cursor-pointer flex flex-col items-center justify-center relative shadow-xl transition-all active:scale-90
+                                    ${pulseIndex === i ? 'pulse-active' : ''}
+                                    ${cell.type === 'gravel' ? 'border-orange-900/50 bg-orange-950/10' : 'border-white/5 bg-white/5 hover:bg-white/10'}`}>
+                                    
                                     {cell.content ? (
                                         <>
-                                            <span className={`text-4xl md:text-5xl animate-pop ${cell.content.isMature ? 'animate-bounce' : ''}`}>
+                                            <span className={`text-4xl md:text-5xl animate-pop ${cell.content.isMature ? 'animate-bounce drop-shadow-[0_0_10px_rgba(74,222,128,0.5)]' : 'opacity-80'}`}>
                                                 {cell.content.isWeed ? '🌾' : (cell.content.isMature ? cell.content.icon : '🌱')}
                                             </span>
                                             {!cell.content.isMature && !cell.content.isWeed && (
-                                                <div className="absolute bottom-2 w-3/4 h-2 bg-slate-200/50 rounded-full overflow-hidden">
+                                                <div className="absolute bottom-2 w-3/4 h-1 bg-white/10 rounded-full">
                                                     <div className="h-full bg-green-500" style={{ width: `${Math.min(100, (cell.content.age / cell.content.growth) * 100)}%` }}></div>
                                                 </div>
                                             )}
                                         </>
-                                    ) : null}
+                                    ) : (
+                                        <div className="text-[10px] text-white/5 font-black uppercase">{cell.type === 'gravel' ? 'Gravel' : ''}</div>
+                                    )}
                                 </div>
                             ))}
                         </div>
 
-                        <button onClick={handleNextMonth} className="mt-8 w-full max-w-lg bg-slate-900 text-white py-6 rounded-3xl font-black text-2xl shadow-2xl hover:bg-black active:scale-95 transition-all">
-                            📅 進入下個月
+                        <button onClick={handleNextMonth} className="mt-10 w-full max-w-lg bg-green-900/20 border border-green-500/30 text-green-400 py-6 rounded-3xl font-black text-2xl hover:bg-green-900/40 active:scale-95 transition-all">
+                            📅 下一個演替週期
                         </button>
                     </main>
 
+                    {/* 日誌面板 */}
                     <div className="fixed bottom-6 right-6 w-80 pointer-events-none z-50">
-                        <div className="bg-slate-900/95 backdrop-blur-md p-6 rounded-[2rem] shadow-2xl border-2 border-white/20">
-                            <p className="text-white/40 text-[10px] font-black mb-3 tracking-widest uppercase">生態狀態監測</p>
-                            <div className="space-y-2">
+                        <div className="bg-black/90 backdrop-blur-xl p-6 rounded-[2rem] border border-white/10 shadow-2xl">
+                            <p className="text-green-800 text-[10px] font-black mb-3 tracking-widest uppercase italic">Syntropy Log</p>
+                            <div className="space-y-1">
                                 {logs.map((log, i) => (
-                                    <div key={i} className={`text-sm md:text-base font-bold animate-pop leading-tight ${log.includes('✨') ? 'text-yellow-300' : (log.includes('❌') || log.includes('⚠️') ? 'text-red-400' : 'text-green-400')}`}>
-                                        • {log}
+                                    <div key={i} className={`text-xs font-bold animate-pop leading-tight ${log.includes('✂️') ? 'text-yellow-400' : 'text-green-500/80'}`}>
+                                        {log}
                                     </div>
                                 ))}
                             </div>
