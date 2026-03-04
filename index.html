@@ -1,128 +1,130 @@
-<!DOCTYPE html>
-<html lang="zh-TW">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>食物森林：城市綠洲模擬器</title>
-    <style>
-        :root { --forest-green: #2d5a27; --dirt: #795548; --sun: #ffeb3b; }
-        body { font-family: sans-serif; background: #f0f4f0; display: flex; flex-direction: column; align-items: center; }
-        h1 { color: var(--forest-green); }
-        #game-container { display: flex; gap: 20px; margin-top: 20px; flex-wrap: wrap; justify-content: center; }
-        
-        /* 地圖網格 */
-        #grid { display: grid; grid-template-columns: repeat(5, 60px); grid-template-rows: repeat(5, 60px); gap: 5px; background: var(--dirt); padding: 10px; border-radius: 8px; }
-        .cell { width: 60px; height: 60px; background: #8d6e63; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 30px; transition: 0.3s; }
-        .cell:hover { background: #a1887f; }
+<div id="stats-bar" style="display: flex; gap: 20px; font-weight: bold; margin-bottom: 10px;">
+    <div style="color: #e91e63;">⚡ 剩餘能量: <span id="energy-val">100</span></div>
+    <div style="color: #2196f3;">💧 氣候狀態: <span id="weather-val">正常</span></div>
+    <button onclick="resetGame()" style="padding: 5px 15px; cursor: pointer;">🔄 重設土地</button>
+</div>
 
-        /* 植物選單 */
-        #menu { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 250px; }
-        .plant-option { padding: 8px; margin: 5px 0; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; }
-        .plant-option:hover { background: #e8f5e9; }
-        .selected { border: 2px solid var(--forest-green); background: #e8f5e9; }
+<script>
+    // 1. 擴充植物資料：加入成本 (cost) 與 偏好 (pref)
+    const plants = [
+        { id: "mango", name: "芒果", emoji: "🌳", layer: 1, cost: 50, provides: ["shade"], needs: ["sun"], drought_resist: false },
+        { id: "pigeon_pea", name: "樹豆", emoji: "🌿", layer: 3, cost: 20, provides: ["nitrogen"], needs: ["sun"], drought_resist: true },
+        { id: "turmeric", name: "薑黃", emoji: "🍠", layer: 6, cost: 15, provides: [], needs: ["shade"], drought_resist: false },
+        { id: "sweet_potato", name: "地瓜葉", emoji: "🍃", layer: 5, cost: 10, provides: ["ground_cover"], needs: ["shade"], drought_resist: true },
+        { id: "aloe", name: "蘆薈", emoji: "🌵", layer: 4, cost: 15, provides: [], needs: ["sun"], drought_resist: true, soil_pref: "gravel" },
+        { id: "taro", name: "芋頭", emoji: "🥔", layer: 6, cost: 20, provides: [], needs: ["shade"], drought_resist: false, soil_pref: "wetland" }
+    ];
 
-        /* 狀態列 */
-        #status { margin-top: 20px; padding: 15px; background: white; border-radius: 8px; width: 80%; max-width: 600px; }
-        .score-box { font-size: 24px; font-weight: bold; color: var(--forest-green); }
-    </style>
-</head>
-<body>
+    let energy = 100;
+    let gardenData = []; 
+    let cellTypes = []; // 儲存土地屬性：normal, gravel, wetland
 
-    <h1>🌿 食物森林：城市綠洲模擬器</h1>
-    <p>點選右側植物，再點擊左側土地開始種植！</p>
-
-    <div id="game-container">
-        <div id="grid"></div>
-
-        <div id="menu">
-            <h3>選擇植物</h3>
-            <div id="plant-list"></div>
-        </div>
-    </div>
-
-    <div id="status">
-        <div class="score-box">目前森林健康值: <span id="total-score">0</span></div>
-        <div id="log">點擊土地來建立你的生態系...</div>
-    </div>
-
-    <script>
-        // 1. 植物資料庫 (從 JSON 簡化而來)
-        const plants = [
-            { id: "mango", name: "芒果", emoji: "🌳", layer: 1, provides: ["shade"], needs: ["sun"] },
-            { id: "pigeon_pea", name: "樹豆", emoji: "🌿", layer: 3, provides: ["nitrogen"], needs: ["sun"] },
-            { id: "turmeric", name: "薑黃", emoji: "🍠", layer: 6, provides: [], needs: ["shade"] },
-            { id: "sweet_potato", name: "地瓜葉", emoji: "🍃", layer: 5, provides: ["ground_cover"], needs: ["shade"] }
-        ];
-
-        let selectedPlant = null;
-        let gardenData = []; // 存儲地圖上已種植的植物 {x, y, plantId}
-
-        // 2. 初始化選單
-        const menuEl = document.getElementById('plant-list');
-        plants.forEach(p => {
-            const div = document.createElement('div');
-            div.className = 'plant-option';
-            div.innerHTML = `${p.emoji} ${p.name} (層次 ${p.layer})`;
-            div.onclick = () => {
-                document.querySelectorAll('.plant-option').forEach(el => el.classList.remove('selected'));
-                div.classList.add('selected');
-                selectedPlant = p;
-            };
-            menuEl.appendChild(div);
-        });
-
-        // 3. 初始化地圖 (5x5)
+    // 2. 初始化隨機土地屬性
+    function initGrid() {
         const gridEl = document.getElementById('grid');
+        gridEl.innerHTML = "";
+        cellTypes = [];
         for (let i = 0; i < 25; i++) {
+            let type = "normal";
+            let rand = Math.random();
+            if (rand < 0.15) type = "gravel"; // 15% 石礫地
+            else if (rand > 0.85) type = "wetland"; // 15% 低窪地
+            
+            cellTypes.push(type);
             const cell = document.createElement('div');
             cell.className = 'cell';
+            cell.id = `cell-${i}`;
+            if(type === "gravel") cell.style.border = "2px dashed #9e9e9e"; // 石礫地視覺
+            if(type === "wetland") cell.style.backgroundColor = "#5d4037"; // 低窪地視覺
+            
             const x = i % 5;
             const y = Math.floor(i / 5);
-            cell.onclick = () => plantInCell(x, y, cell);
+            cell.onclick = () => plantInCell(x, y, i, cell);
             gridEl.appendChild(cell);
         }
+    }
 
-        // 4. 種植邏輯
-        function plantInCell(x, y, cell) {
-            if (!selectedPlant) { alert("請先選擇一種植物！"); return; }
-            if (cell.innerHTML !== "") return; // 已有植物
-
-            cell.innerHTML = selectedPlant.emoji;
-            const newPlant = { x, y, ...selectedPlant };
-            gardenData.push(newPlant);
+    // 3. 重置功能
+    function resetGame() {
+        if(confirm("確定要清除整片森林嗎？能量將回補至 100。")) {
+            energy = 100;
+            gardenData = [];
+            document.getElementById('energy-val').innerText = energy;
+            initGrid();
             updateGame();
         }
+    }
 
-        // 5. 更新分數與回饋
-        function updateGame() {
-            let totalScore = 0;
-            let logMessages = [];
+    // 4. 改良後的種植邏輯 (包含預算與土地檢查)
+    function plantInCell(x, y, index, cell) {
+        if (!selectedPlant) return;
+        if (cell.innerHTML !== "" && cell.innerHTML !== "🌾") return; // 除非是雜草否則不能覆蓋
 
-            gardenData.forEach(p => {
-                let synergy = 0;
-                // 檢查周圍植物
-                gardenData.forEach(other => {
-                    if (p === other) return;
-                    const dist = Math.sqrt(Math.pow(p.x - other.x, 2) + Math.pow(p.y - other.y, 2));
-                    
-                    if (dist <= 1.5) { // 鄰近格
-                        if (p.needs.includes("shade") && other.provides.includes("shade")) {
-                            synergy += 20;
-                            logMessages.push(`✨ ${p.name} 感謝 ${other.name} 提供的遮蔭！`);
-                        }
-                        if (other.provides.includes("nitrogen")) {
-                            synergy += 15;
-                            logMessages.push(`💪 ${other.name} 正在幫周圍固氮！`);
-                        }
-                    }
-                });
-                totalScore += synergy;
-            });
-
-            document.getElementById('total-score').innerText = totalScore;
-            const logEl = document.getElementById('log');
-            logEl.innerHTML = logMessages.length > 0 ? logMessages.slice(-3).join("<br>") : "森林正在緩慢成長中...";
+        // 能量檢查
+        if (energy < selectedPlant.cost) {
+            alert("能量不足！請等待共生回補。");
+            return;
         }
-    </script>
-</body>
-</html>
+
+        // 土地偏好檢查
+        const soilType = cellTypes[index];
+        if (selectedPlant.soil_pref && selectedPlant.soil_pref !== soilType) {
+            alert(`這棵植物喜歡 ${selectedPlant.soil_pref === 'gravel' ? '石礫地' : '低窪地'}，種在這裡會長不好喔！`);
+            return;
+        }
+
+        // 扣除能量並種植
+        energy -= selectedPlant.cost;
+        document.getElementById('energy-val').innerText = energy;
+        cell.innerHTML = selectedPlant.emoji;
+        cell.style.opacity = "1";
+        
+        gardenData.push({ x, y, index, ...selectedPlant });
+        updateGame();
+    }
+
+    // 5. 隨機事件邏輯 (雜草與乾旱)
+    setInterval(() => {
+        // A. 雜草入侵：隨機選一個空格長出雜草
+        if (Math.random() > 0.7) {
+            const emptyCells = Array.from(document.querySelectorAll('.cell')).filter(c => c.innerHTML === "");
+            if (emptyCells.length > 0) {
+                const target = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+                target.innerHTML = "🌾";
+                target.style.color = "green";
+                // 雜草扣分邏輯可在 updateGame 實作
+            }
+        }
+
+        // B. 乾旱挑戰
+        if (Math.random() > 0.9) {
+            triggerDrought();
+        }
+    }, 5000); // 每 5 秒判定一次
+
+    function triggerDrought() {
+        document.getElementById('weather-val').innerText = "☀️ 嚴重乾旱中！";
+        document.getElementById('weather-val').style.color = "red";
+        
+        // 檢查地圖上所有植物
+        gardenData.forEach(p => {
+            const cell = document.getElementById(`cell-${p.index}`);
+            // 如果植物不耐旱 且 周圍沒有保濕植物 (地瓜葉)
+            const hasProtection = gardenData.some(other => 
+                other.provides.includes("ground_cover") && 
+                Math.sqrt(Math.pow(p.x-other.x,2) + Math.pow(p.y-other.y,2)) <= 1.5
+            );
+
+            if (!p.drought_resist && !hasProtection) {
+                cell.style.opacity = "0.3"; // 變暗代表受損
+                energy = Math.max(0, energy - 5); // 乾旱扣能量
+            }
+        });
+
+        setTimeout(() => {
+            document.getElementById('weather-val').innerText = "正常";
+            document.getElementById('weather-val').style.color = "black";
+            gardenData.forEach(p => document.getElementById(`cell-${p.index}`).style.opacity = "1");
+        }, 4000); // 乾旱持續 4 秒
+    }
+</script>
