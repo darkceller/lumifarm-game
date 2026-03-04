@@ -3,13 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>尋光農場 Luminous Farm</title>
+    <title>尋光農場 - 穩定防崩潰版</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
-    
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <style>
@@ -34,7 +32,6 @@
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 10px; }
 
-        /* 動畫定義 */
         @keyframes float-down {
             0% { transform: translateY(-10vh) rotate(0deg); opacity: 0; }
             10% { opacity: 0.8; }
@@ -51,357 +48,37 @@
     <div id="root"></div>
 
     <script>
-        window.onerror = function(message) {
-            document.getElementById('root').innerHTML = `<div style="color:red;padding:20px;">遊戲載入發生錯誤: ${message}</div>`;
+        // 全域錯誤捕捉，讓玩家可以手動排除錯誤
+        window.onerror = function(message, source, lineno, colno, error) {
+            document.getElementById('root').innerHTML = `
+                <div style="color:#b91c1c; background:#fef2f2; padding:20px; height:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center;">
+                    <h2 style="font-size:1.5rem; font-weight:bold; margin-bottom:10px;">⚠️ 遊戲載入異常</h2>
+                    <p style="margin-bottom:20px;">這可能是由於瀏覽器阻擋或快取錯誤導致。<br/>錯誤訊息: ${message}</p>
+                    <button onclick="localStorage.removeItem('lsFarmScores'); window.location.reload();" style="background:#b91c1c; color:white; padding:12px 24px; border-radius:8px; border:none; font-weight:bold; font-size:1rem; cursor:pointer;">
+                        點擊此處修復並重新載入
+                    </button>
+                </div>
+            `;
+            return true;
         };
     </script>
 
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
 
+        // --- 安全的 LocalStorage 存取機制 (防崩潰核心) ---
+        const safeGetStorage = (key) => {
+            try { return localStorage.getItem(key); } catch (e) { return null; }
+        };
+        const safeSetStorage = (key, value) => {
+            try { localStorage.setItem(key, value); } catch (e) { console.warn("瀏覽器阻擋了儲存功能"); }
+        };
+
         // --- 圖標元件 ---
-        const IconWrapper = ({ children, className }) => <span className={`leading-none inline-block ${className}`}>{children}</span>;
+        const IconWrapper = ({ children, className }) => <span className={`leading-none inline-block ${className || ''}`}>{children}</span>;
         const Leaf = ({className}) => <IconWrapper className={className}>🍃</IconWrapper>;
         const DollarSign = ({className}) => <IconWrapper className={className}>💰</IconWrapper>;
         const Calendar = ({className}) => <IconWrapper className={className}>📅</IconWrapper>;
         const Zap = ({className}) => <IconWrapper className={className}>⚡</IconWrapper>;
         const TreePine = ({className}) => <IconWrapper className={className}>🌲</IconWrapper>;
-        const LeafyGreen = ({className}) => <IconWrapper className={className}>🥬</IconWrapper>;
-        const Sprout = ({className}) => <IconWrapper className={className}>🌱</IconWrapper>;
-        const Cherry = ({className}) => <IconWrapper className={className}>🍒</IconWrapper>;
-        const Truck = ({className}) => <IconWrapper className={className}>🚜</IconWrapper>;
-        const Scissors = ({className}) => <IconWrapper className={className}>✂️</IconWrapper>;
-        const Shovel = ({className}) => <IconWrapper className={className}>⛏️</IconWrapper>;
-        const AlertTriangle = ({className}) => <IconWrapper className={className}>⚠️</IconWrapper>;
-        const X = ({className}) => <IconWrapper className={className}>❌</IconWrapper>;
-        const Sparkles = ({className}) => <IconWrapper className={className}>✨</IconWrapper>;
-        const PieChartIcon = ({className}) => <IconWrapper className={className}>📊</IconWrapper>;
-        const Users = ({className}) => <IconWrapper className={className}>👥</IconWrapper>;
-        const Briefcase = ({className}) => <IconWrapper className={className}>💼</IconWrapper>;
-        const GraduationCap = ({className}) => <IconWrapper className={className}>🎓</IconWrapper>;
-        const Trophy = ({className}) => <IconWrapper className={className}>🏆</IconWrapper>;
-        const Flag = ({className}) => <IconWrapper className={className}>🏁</IconWrapper>;
-
-        // --- 背景特效 ---
-        const SeasonalBackground = ({ season }) => {
-            const elements = useMemo(() => {
-                const count = season === 'summer' ? 6 : 15; 
-                return [...Array(count)].map((_, i) => ({
-                    id: i,
-                    left: Math.random() * 100 + '%',
-                    top: Math.random() * 100 + '%', 
-                    animationDuration: (Math.random() * 10 + 10) + 's', 
-                    animationDelay: -(Math.random() * 20) + 's', 
-                    size: Math.random() * 1.5 + 1 + 'rem',
-                    opacity: Math.random() * 0.3 + 0.1
-                }));
-            }, [season]);
-
-            let icon = '';
-            let animClass = '';
-            
-            switch(season) {
-                case 'spring': icon = '🌸'; animClass = 'animate-[float-down_linear_infinite]'; break;
-                case 'summer': icon = '☀️'; animClass = 'animate-[pulse-fade_ease-in-out_infinite]'; break;
-                case 'autumn': icon = '🍂'; animClass = 'animate-[float-down_linear_infinite]'; break;
-                case 'winter': icon = '❄️'; animClass = 'animate-[float-down_linear_infinite]'; break;
-                default: icon = '';
-            }
-
-            return (
-                <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
-                    {elements.map(el => (
-                        <div key={el.id} className={`absolute ${animClass}`} style={{ left: el.left, top: season === 'summer' ? el.top : '-10%', animationDuration: el.animationDuration, animationDelay: el.animationDelay, fontSize: el.size, opacity: el.opacity }}>
-                            {icon}
-                        </div>
-                    ))}
-                </div>
-            );
-        };
-
-        // --- 資料設定 ---
-        const CROPS = {
-          herb: { id: 'herb', name: '大型草本', icon: <Leaf className="text-teal-500" />, carbonReq: 0, cost: 10, growthMonths: 2, pruneStartMonth: 2, pruneInterval: 1, description: "含碳0可種。滿2月可修剪。", category: 'carbon', typhoonCarbon: 3, actions: { prune: { label: '修剪', carbon: 1, keep: true, desc: '增加碳庫1' }, dig: { label: '挖除', carbon: 3, remove: true, desc: '增加碳庫3' } } },
-          fastTree: { id: 'fastTree', name: '速生樹種', icon: <Sprout className="text-green-600" />, carbonReq: 0, cost: 15, growthMonths: 6, pruneStartMonth: 6, pruneInterval: 2, description: "含碳0可種。滿6月可修剪。", category: 'carbon', typhoonCarbon: 15, actions: { prune: { label: '修剪', carbon: 3, keep: true, desc: '增加碳庫3' }, dig: { label: '挖除', baseCarbon: 15, bonusCarbon: 25, bonusThreshold: 24, remove: true, desc: '增加碳庫' } } },
-          vegetable: { id: 'vegetable', name: '蔬菜', icon: <LeafyGreen className="text-green-500" />, carbonReq: 5, cost: 1, growthMonths: 1, description: "含碳5可種。短期獲利。", category: 'money', typhoonCarbon: 1, actions: { harvest: { label: '收成', money: 10, carbon: -1, remove: true, desc: '獲利$10, 碳庫-1' } } },
-          shrub: { id: 'shrub', name: '果實灌木', icon: <Cherry className="text-pink-600" size={20} />, carbonReq: 15, cost: 20, growthMonths: 12, description: "含碳15可種。長期作物。", category: 'money', typhoonCarbon: 15, actions: { harvest: { label: '收成', money: 300, carbon: -30, keep: true, resetGrowth: 3, desc: '獲利$300' }, dig: { label: '挖除', carbon: 15, remove: true, desc: '增加碳庫15' } } },
-          fruitTree: { id: 'fruitTree', name: '果樹', icon: <TreePine className="text-red-500" />, carbonReq: 30, cost: 20, growthMonths: 24, description: "含碳30可種。高經濟價值。", category: 'money', typhoonCarbon: 15, actions: { harvest: { label: '收成', money: 500, carbon: -50, keep: true, resetGrowth: 6, desc: '獲利$500' }, dig: { label: '挖除', carbon: 15, remove: true, desc: '增加碳庫15' } } },
-          premiumTree: { id: 'premiumTree', name: '極相林木', icon: <TreePine className="text-green-800" size={28} />, carbonReq: 50, cost: 30, growthMonths: 36, pruneStartMonth: 12, pruneInterval: 6, description: "含碳50可種。每冬落葉歸根。", category: 'carbon', typhoonCarbon: 50, actions: { prune: { label: '修剪', carbon: 25, keep: true, desc: '增加碳庫25' }, dig: { label: '挖除', baseCarbon: 15, bonusCarbon: 50, bonusThreshold: 36, remove: true, desc: '增加碳庫' } } }
-        };
-
-        const CARBON_MILESTONES = [
-            { threshold: 10, title: "初露鋒芒", desc: "可產出優質蔬果" },
-            { threshold: 30, title: "生態改善", desc: "植物病蟲害降低50%" },
-            { threshold: 50, title: "土地復甦", desc: "土壤溫度維持適中，植物無病蟲害" },
-            { threshold: 150, title: "氣候調節", desc: "為周遭環境帶來凝結核，增加在地降雨機率" },
-            { threshold: 250, title: "環境淨化", desc: "使空氣汙染降低5%，強降雨機率-10%" },
-            { threshold: 500, title: "地球守護者", desc: "使整體海洋產氧量上升1%" },
-        ];
-
-        const ALL_EVENTS = {
-          1: { id: 1, name: '志工招募', desc: '成功吸引附近居民加入志工', type: 'good' },
-          2: { id: 2, name: '農夫市集', desc: '參與假日農夫市集擺攤', type: 'good' },
-          3: { id: 3, name: '輕度颱風', desc: '隨機移除5格作物，殘枝化作養分', type: 'bad' },
-          4: { id: 4, name: '中度颱風', desc: '隨機移除7格作物，殘枝化作養分', type: 'bad' },
-          5: { id: 5, name: '強度颱風', desc: '隨機移除10格作物，殘枝化作養分', type: 'bad' },
-          6: { id: 6, name: '受邀演講', desc: '分享經驗，成功招募志工，獲得講師費', type: 'good' },
-          7: { id: 7, name: '極端氣候(陰)', desc: '日照不足，作物生長延長2個月', type: 'weather' },
-          8: { id: 8, name: '極端氣候(晴)', desc: '日照過強，暫停收成2個月', type: 'weather' },
-          9: { id: 9, name: '政府補助', desc: '成功爭取到政府補助經費', type: 'good' },
-        };
-
-        const EVENTS_POOL = { spring: [1, 9, 6, 2], summer: [2, 8, 3, 4], autumn: [4, 5, 6, 2], winter: [7, 1, 9, 3] };
-        const getSeason = (m) => { if (m >= 3 && m <= 5) return 'spring'; if (m >= 6 && m <= 8) return 'summer'; if (m >= 9 && m <= 11) return 'autumn'; return 'winter'; };
-        
-        const getTheme = (season) => {
-            switch(season) {
-                case 'spring': return 'bg-pink-50 text-pink-900'; 
-                case 'summer': return 'bg-yellow-50 text-yellow-900';
-                case 'autumn': return 'bg-orange-50 text-stone-800';
-                case 'winter': return 'bg-sky-50 text-slate-800'; 
-                default: return 'bg-stone-50 text-stone-800';
-            }
-        };
-
-        function LightSeekingFarm() {
-          const [gameState, setGameState] = useState('intro');
-          const [money, setMoney] = useState(5000);
-          const [carbon, setCarbon] = useState(0); 
-          const [year, setYear] = useState(1);
-          const [month, setMonth] = useState(1);
-          const [maxActionPoints, setMaxActionPoints] = useState(10);
-          const [actionPoints, setActionPoints] = useState(10);
-          const [grid, setGrid] = useState(Array(36).fill(null)); 
-          const [selectedCrop, setSelectedCrop] = useState(null);
-          const [logs, setLogs] = useState(["遊戲開始！"]);
-          const [activeCards, setActiveCards] = useState({ company: false, school: false });
-          const [volunteerCount, setVolunteerCount] = useState(0);
-          const [lastVolunteerUsage, setLastVolunteerUsage] = useState(-999);
-          const [hasMachinery, setHasMachinery] = useState(false); 
-          const [machineryLife, setMachineryLife] = useState(0); 
-          const [harvestBlock, setHarvestBlock] = useState(0); 
-          const [showEventModal, setShowEventModal] = useState(false);
-          const [quarterlyReport, setQuarterlyReport] = useState(null);
-          const [selectedCellIndex, setSelectedCellIndex] = useState(null);
-          const [leafFallData, setLeafFallData] = useState(null); 
-          const [showNoAPModal, setShowNoAPModal] = useState(false);
-          const [showSpiritIntroModal, setShowSpiritIntroModal] = useState(false); 
-          const [showTutorialModal, setShowTutorialModal] = useState(false); 
-          const [unlockedMilestones, setUnlockedMilestones] = useState([]);
-          const [achievementQueue, setAchievementQueue] = useState([]); 
-          const [activeTab, setActiveTab] = useState('farm');
-          
-          const [playerName, setPlayerName] = useState('');
-          const [nameError, setNameError] = useState(false);
-          const [highScores, setHighScores] = useState([]);
-
-          const currentSeason = getSeason(month);
-          const themeClass = getTheme(currentSeason);
-          const scrollRef = useRef(null);
-
-          useEffect(() => {
-              const savedScores = localStorage.getItem('lsFarmScores');
-              if (savedScores) {
-                  setHighScores(JSON.parse(savedScores));
-              }
-          }, []);
-
-          const handleGameEnd = (finalState) => {
-              setGameState(finalState);
-              const finalScore = (carbon * 10) + money;
-              const newRecord = {
-                  name: playerName || "無名農夫",
-                  money: money,
-                  carbon: carbon,
-                  time: `Y${year}/M${month}`,
-                  score: finalScore,
-                  date: new Date().toLocaleDateString()
-              };
-              const updatedScores = [...highScores, newRecord]
-                  .sort((a, b) => b.score - a.score) 
-                  .slice(0, 10); 
-              setHighScores(updatedScores);
-              localStorage.setItem('lsFarmScores', JSON.stringify(updatedScores));
-          };
-
-          useEffect(() => {
-              const newAchievements = [];
-              CARBON_MILESTONES.forEach(milestone => {
-                  if (carbon >= milestone.threshold && !unlockedMilestones.includes(milestone.threshold)) {
-                      newAchievements.push(milestone);
-                  }
-              });
-              if (newAchievements.length > 0) {
-                  setUnlockedMilestones(prev => [...prev, ...newAchievements.map(m => m.threshold)]);
-                  setAchievementQueue(prev => [...prev, ...newAchievements]);
-              }
-          }, [carbon, unlockedMilestones]);
-
-          useEffect(() => {
-              if (achievementQueue.length > 0) {
-                  const timer = setTimeout(() => setAchievementQueue(prev => prev.slice(1)), 4000);
-                  return () => clearTimeout(timer);
-              }
-          }, [achievementQueue]);
-
-          useEffect(() => { 
-              if (money < 0 && gameState === 'playing') { 
-                  handleGameEnd('bankrupt');
-              } 
-          }, [money, gameState]);
-
-          const addLog = (msg) => setLogs(prev => [msg, ...prev].slice(0, 5));
-          const checkAP = () => { if (actionPoints <= 0) { setShowNoAPModal(true); return false; } return true; };
-          const getTotalMonths = (y, m) => (y - 1) * 12 + m;
-          const currentTotalMonths = getTotalMonths(year, month);
-
-          const startGame = () => { 
-              if (!playerName.trim()) {
-                  setNameError(true);
-                  return;
-              }
-              setNameError(false);
-              setGameState('playing'); 
-              setShowTutorialModal(true); 
-          };
-
-          const restartGame = () => {
-            setMoney(5000); setCarbon(0); setYear(1); setMonth(1); setMaxActionPoints(10); setActionPoints(10);
-            setGrid(Array(36).fill(null)); setSelectedCrop(null); setLogs(["遊戲重置！"]); setActiveCards({ company: false, school: false });
-            setVolunteerCount(0); setLastVolunteerUsage(-999); setHasMachinery(false); setMachineryLife(0); setHarvestBlock(0);
-            setShowEventModal(false); setQuarterlyReport(null); setLeafFallData(null); setShowSpiritIntroModal(false); setShowTutorialModal(false);
-            setSelectedCellIndex(null); setUnlockedMilestones([]); setAchievementQueue([]); setGameState('intro'); setActiveTab('farm');
-          };
-
-          const handlePlant = (index) => {
-            if (!checkAP()) return;
-            if (!selectedCrop) {
-                if(window.innerWidth < 768) { addLog("請先至「商店」選擇作物！"); setActiveTab('shop'); }
-                return;
-            }
-            const cropInfo = CROPS[selectedCrop];
-            if (money < cropInfo.cost) { addLog(`資金不足！需 $${cropInfo.cost}`); return; }
-            if (carbon < cropInfo.carbonReq) { addLog(`碳庫不足！需 ${cropInfo.carbonReq} 碳`); return; }
-            const newGrid = [...grid];
-            newGrid[index] = { ...cropInfo, plantedAt: { year, month }, lastPrunedTotalMonths: -999, ageMonths: 0, stage: 'seed', stunted: false, extraGrowthNeeded: 0 };
-            setGrid(newGrid); setMoney(prev => prev - cropInfo.cost); setActionPoints(prev => prev - 1); addLog(`種植 ${cropInfo.name}`);
-          };
-
-          const handleGridClick = (index) => {
-            if (gameState !== 'playing') return;
-            if (grid[index]) { setSelectedCellIndex(index); return; }
-            handlePlant(index);
-          };
-
-          const manageMachinery = () => {
-            if (hasMachinery && machineryLife <= 0) { if (money < 500) { addLog("缺$500維修"); return; } setMoney(prev => prev - 500); setMachineryLife(12); addLog("維修完成(1年)"); return; }
-            if (!hasMachinery) { if (money < 1000) { addLog("缺$1000購買"); return; } setMoney(prev => prev - 1000); setHasMachinery(true); setMachineryLife(36); addLog("購置成功(3年)"); }
-          };
-          const activateCard = (type) => {
-             if (activeCards[type]) return;
-             if (type==='school' && (year<2 || carbon<200)) { addLog("需第2年+碳200"); return; }
-             if (type==='company' && (year<2 || carbon<400)) { addLog("需第2年+碳400"); return; }
-             setActiveCards(prev=>({...prev, [type]:true})); addLog("合作簽署成功！");
-          };
-          const recruitVolunteer = () => {
-              if (volunteerCount>=4 || (currentTotalMonths-lastVolunteerUsage<3)) { addLog("冷卻或上限"); return; }
-              if (money<500) { addLog("缺$500"); return; }
-              setMoney(p=>p-500); setMaxActionPoints(p=>p+3); setActionPoints(p=>p+3); setVolunteerCount(p=>p+1); setLastVolunteerUsage(currentTotalMonths); addLog("志工招募成功(AP+3)");
-          };
-
-          const harvestAll = () => {
-              if (!hasMachinery || machineryLife <= 0) { addLog("農機不可用"); return; }
-              if (!checkAP()) return;
-              if (harvestBlock > 0) { addLog("極端氣候禁收"); return; }
-              let tm=0, tc=0, count=0; const ng = [...grid];
-              ng.forEach((c,i)=>{
-                  if(c && c.stage==='mature' && c.actions.harvest && c.ageMonths>0){
-                      tm+=c.actions.harvest.money||0; tc+=c.actions.harvest.carbon||0; count++;
-                      if(c.actions.harvest.remove) ng[i]=null;
-                      else if(c.actions.harvest.resetGrowth) { ng[i]={...c, ageMonths:Math.max(0,c.ageMonths-c.actions.harvest.resetGrowth), stage:'growing'}; }
-                  }
-              });
-              if(count>0) { setGrid(ng); setMoney(p=>p+tm); setCarbon(p=>Math.max(0,p+tc)); setActionPoints(p=>p-1); addLog(`一鍵收成${count}作物`); }
-              else addLog("無可收成作物");
-          };
-
-          const pruneAll = () => {
-              if (year<=1 || carbon<50) { addLog("需第2年且碳>50"); return; }
-              if (!checkAP()) return;
-              let tc=0, count=0; const ng = [...grid];
-              ng.forEach((c,i)=>{
-                  if(c && c.actions.prune){
-                      const okAge = !c.pruneStartMonth || c.ageMonths>=c.pruneStartMonth;
-                      const okCD = c.lastPrunedTotalMonths + (c.pruneInterval||1) <= currentTotalMonths;
-                      if(okAge && okCD){ tc+=c.actions.prune.carbon; ng[i]={...c, lastPrunedTotalMonths:currentTotalMonths}; count++; }
-                  }
-              });
-              if(count>0){ setGrid(ng); setCarbon(p=>p+tc); setActionPoints(p=>p-1); addLog(`精靈修剪${count}株`); }
-              else addLog("無可修剪作物");
-          };
-
-          const executeAction = (type) => {
-              if (selectedCellIndex === null || !checkAP()) { setSelectedCellIndex(null); return; }
-              const cell = grid[selectedCellIndex]; const conf = cell.actions[type];
-              if(cell.ageMonths===0 && conf.remove) { addLog("剛種植不可移除"); return; }
-              if(type==='prune' && cell.pruneStartMonth && cell.ageMonths<cell.pruneStartMonth) { addLog("生長期不足"); return; }
-              if(type==='prune' && cell.lastPrunedTotalMonths+(cell.pruneInterval||1)>currentTotalMonths) { addLog("修剪冷卻中"); return; }
-              if(type==='harvest' && harvestBlock>0) { addLog("禁收中"); return; }
-              
-              let cChange = conf.carbon || 0;
-              if(type==='dig' && conf.bonusThreshold && cell.ageMonths>=conf.bonusThreshold) cChange = conf.bonusCarbon;
-              else if(type==='dig' && conf.baseCarbon) cChange = conf.baseCarbon;
-              
-              if(conf.money) setMoney(p=>p+conf.money);
-              if(cChange!==0) setCarbon(p=>Math.max(0,p+cChange));
-              setActionPoints(p=>p-1); addLog(`${conf.label}${cell.name}`);
-              const ng = [...grid];
-              if(conf.remove) ng[selectedCellIndex]=null;
-              else if(conf.keep) {
-                  if(type==='prune') ng[selectedCellIndex]={...cell, lastPrunedTotalMonths:currentTotalMonths};
-                  if(conf.resetGrowth) ng[selectedCellIndex]={...ng[selectedCellIndex], ageMonths:Math.max(0,cell.ageMonths-conf.resetGrowth), stage:'growing'};
-              }
-              setGrid(ng); setSelectedCellIndex(null);
-          };
-
-          const nextMonth = () => {
-              let nm=month+1, ny=year; if(nm>12) { nm=1; ny++; }
-              
-              if(ny>5) { 
-                  handleGameEnd('finished'); 
-                  return; 
-              }
-              
-              if(ny===2 && nm===1) setShowSpiritIntroModal(true);
-              if(harvestBlock>0) setHarvestBlock(p=>p-1);
-              if(hasMachinery && machineryLife>0) setMachineryLife(p=>p-1);
-              let leafC=0, leafCount=0;
-              const ng = grid.map(c=>{
-                  if(!c) return null;
-                  if(c.id!=='fastTree' && c.id!=='herb' && carbon<c.carbonReq) return {...c, stunted:true};
-                  const nAge = c.ageMonths+1;
-                  const nStage = nAge >= (c.growthMonths+(c.extraGrowthNeeded||0)) ? 'mature' : 'growing';
-                  if(c.id==='premiumTree' && nStage==='mature' && nAge%12===0) { const b = nAge>=36 ? 75 : 30; leafC+=b; leafCount++; }
-                  return {...c, ageMonths:nAge, stage:nStage, stunted:false};
-              });
-              setGrid(ng); setYear(ny); setMonth(nm); setActionPoints(maxActionPoints);
-              if(leafC>0) { setCarbon(p=>p+leafC); setLeafFallData({count:leafCount, carbon:leafC}); }
-              if(nm%3===0 || nm===12) handleQuarterly(ny, nm, ng);
-          };
-
-          const handleQuarterly = (ny, nm, ng) => {
-              let inc=0, exp=500; let rLogs=["基本開銷: -$500"];
-              if(activeCards.school) { inc+=100; rLogs.push("學校合作: +$100"); }
-              if(activeCards.company) { inc+=200; rLogs.push("企業贊助: +$200"); }
-              const pool = EVENTS_POOL[getSeason(nm)] || [1];
-              const evt = ALL_EVENTS[pool[Math.floor(Math.random()*pool.length)]];
-              let effect=""; let resultDesc = evt.desc;
-              switch(evt.id){
-                  case 1: setMaxActionPoints(p=>p+2); setActionPoints(p=>p+2); effect="AP上限+2"; break;
-                  case 2: inc+=200; effect="額外收入: +$200"; break;
-                  case 6: setMaxActionPoints(p=>p+3); inc+=200; effect="AP上限+3, 收入+$200"; break;
-                  case 9: inc+=500; effect="補助金: +$500"; break;
-                  case 7: setGrid(ng.map(c=>(c&&c.stage!=='mature'?{...c,extraGrowthNeeded:(c.extraGrowthNeeded||0)+2}:c))); effect="作物生長延遲2月"; break;
-                  case 8: setHarvestBlock(carbon>200?1:2); effect=`暫停收成 ${carbon>200?1:2} 個月`; break;
-                  case 3: case 4: case 5: {
-                      const num =
+        const LeafyGreen
