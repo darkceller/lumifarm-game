@@ -1,130 +1,266 @@
-<div id="stats-bar" style="display: flex; gap: 20px; font-weight: bold; margin-bottom: 10px;">
-    <div style="color: #e91e63;">⚡ 剩餘能量: <span id="energy-val">100</span></div>
-    <div style="color: #2196f3;">💧 氣候狀態: <span id="weather-val">正常</span></div>
-    <button onclick="resetGame()" style="padding: 5px 15px; cursor: pointer;">🔄 重設土地</button>
-</div>
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>尋光農場 Luminous Farm - GitHub Pro</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-<script>
-    // 1. 擴充植物資料：加入成本 (cost) 與 偏好 (pref)
-    const plants = [
-        { id: "mango", name: "芒果", emoji: "🌳", layer: 1, cost: 50, provides: ["shade"], needs: ["sun"], drought_resist: false },
-        { id: "pigeon_pea", name: "樹豆", emoji: "🌿", layer: 3, cost: 20, provides: ["nitrogen"], needs: ["sun"], drought_resist: true },
-        { id: "turmeric", name: "薑黃", emoji: "🍠", layer: 6, cost: 15, provides: [], needs: ["shade"], drought_resist: false },
-        { id: "sweet_potato", name: "地瓜葉", emoji: "🍃", layer: 5, cost: 10, provides: ["ground_cover"], needs: ["shade"], drought_resist: true },
-        { id: "aloe", name: "蘆薈", emoji: "🌵", layer: 4, cost: 15, provides: [], needs: ["sun"], drought_resist: true, soil_pref: "gravel" },
-        { id: "taro", name: "芋頭", emoji: "🥔", layer: 6, cost: 20, provides: [], needs: ["shade"], drought_resist: false, soil_pref: "wetland" }
-    ];
-
-    let energy = 100;
-    let gardenData = []; 
-    let cellTypes = []; // 儲存土地屬性：normal, gravel, wetland
-
-    // 2. 初始化隨機土地屬性
-    function initGrid() {
-        const gridEl = document.getElementById('grid');
-        gridEl.innerHTML = "";
-        cellTypes = [];
-        for (let i = 0; i < 25; i++) {
-            let type = "normal";
-            let rand = Math.random();
-            if (rand < 0.15) type = "gravel"; // 15% 石礫地
-            else if (rand > 0.85) type = "wetland"; // 15% 低窪地
-            
-            cellTypes.push(type);
-            const cell = document.createElement('div');
-            cell.className = 'cell';
-            cell.id = `cell-${i}`;
-            if(type === "gravel") cell.style.border = "2px dashed #9e9e9e"; // 石礫地視覺
-            if(type === "wetland") cell.style.backgroundColor = "#5d4037"; // 低窪地視覺
-            
-            const x = i % 5;
-            const y = Math.floor(i / 5);
-            cell.onclick = () => plantInCell(x, y, i, cell);
-            gridEl.appendChild(cell);
-        }
-    }
-
-    // 3. 重置功能
-    function resetGame() {
-        if(confirm("確定要清除整片森林嗎？能量將回補至 100。")) {
-            energy = 100;
-            gardenData = [];
-            document.getElementById('energy-val').innerText = energy;
-            initGrid();
-            updateGame();
-        }
-    }
-
-    // 4. 改良後的種植邏輯 (包含預算與土地檢查)
-    function plantInCell(x, y, index, cell) {
-        if (!selectedPlant) return;
-        if (cell.innerHTML !== "" && cell.innerHTML !== "🌾") return; // 除非是雜草否則不能覆蓋
-
-        // 能量檢查
-        if (energy < selectedPlant.cost) {
-            alert("能量不足！請等待共生回補。");
-            return;
-        }
-
-        // 土地偏好檢查
-        const soilType = cellTypes[index];
-        if (selectedPlant.soil_pref && selectedPlant.soil_pref !== soilType) {
-            alert(`這棵植物喜歡 ${selectedPlant.soil_pref === 'gravel' ? '石礫地' : '低窪地'}，種在這裡會長不好喔！`);
-            return;
-        }
-
-        // 扣除能量並種植
-        energy -= selectedPlant.cost;
-        document.getElementById('energy-val').innerText = energy;
-        cell.innerHTML = selectedPlant.emoji;
-        cell.style.opacity = "1";
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap');
         
-        gardenData.push({ x, y, index, ...selectedPlant });
-        updateGame();
-    }
-
-    // 5. 隨機事件邏輯 (雜草與乾旱)
-    setInterval(() => {
-        // A. 雜草入侵：隨機選一個空格長出雜草
-        if (Math.random() > 0.7) {
-            const emptyCells = Array.from(document.querySelectorAll('.cell')).filter(c => c.innerHTML === "");
-            if (emptyCells.length > 0) {
-                const target = emptyCells[Math.floor(Math.random() * emptyCells.length)];
-                target.innerHTML = "🌾";
-                target.style.color = "green";
-                // 雜草扣分邏輯可在 updateGame 實作
-            }
+        body { 
+            font-family: 'Noto+Sans+TC', sans-serif;
+            background-color: #f0f2f0;
+            margin: 0;
+            overflow: hidden;
+            touch-action: manipulation;
         }
 
-        // B. 乾旱挑戰
-        if (Math.random() > 0.9) {
-            triggerDrought();
+        .farm-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 8px;
+            width: 100%;
+            max-width: 600px;
         }
-    }, 5000); // 每 5 秒判定一次
 
-    function triggerDrought() {
-        document.getElementById('weather-val').innerText = "☀️ 嚴重乾旱中！";
-        document.getElementById('weather-val').style.color = "red";
-        
-        // 檢查地圖上所有植物
-        gardenData.forEach(p => {
-            const cell = document.getElementById(`cell-${p.index}`);
-            // 如果植物不耐旱 且 周圍沒有保濕植物 (地瓜葉)
-            const hasProtection = gardenData.some(other => 
-                other.provides.includes("ground_cover") && 
-                Math.sqrt(Math.pow(p.x-other.x,2) + Math.pow(p.y-other.y,2)) <= 1.5
+        .cell-aspect {
+            aspect-ratio: 1 / 1;
+        }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        /* 成長進度條動畫 */
+        .progress-bar {
+            transition: width 0.5s ease-out;
+        }
+
+        @keyframes popIn {
+            0% { transform: scale(0.8); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .animate-pop { animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        // --- 作物數據定義 ---
+        const CROPS = {
+            herb: { id: 'herb', name: '大型草本', icon: '🌿', cost: 10, carbon: 5, growth: 2, desc: '初期碳匯首選' },
+            vegetable: { id: 'vegetable', name: '有機蔬菜', icon: '🥬', cost: 5, carbon: -1, growth: 1, money: 15, desc: '快速換取現金' },
+            fastTree: { id: 'fastTree', name: '速生樹種', icon: '🌱', cost: 20, carbon: 25, growth: 6, desc: '中期的碳庫支柱' },
+            fruitTree: { id: 'fruitTree', name: '熱帶果樹', icon: '🍎', cost: 50, carbon: 15, growth: 12, money: 200, desc: '高收益長線作物' },
+            premiumTree: { id: 'premiumTree', name: '極相林木', icon: '🌳', cost: 100, carbon: 100, growth: 24, desc: '最終進化形態' }
+        };
+
+        function App() {
+            const [gameState, setGameState] = useState('intro');
+            const [money, setMoney] = useState(500);
+            const [carbon, setCarbon] = useState(0);
+            const [year, setYear] = useState(1);
+            const [month, setMonth] = useState(1);
+            const [ap, setAp] = useState(10);
+            const [grid, setGrid] = useState(Array(36).fill(null));
+            const [selectedCrop, setSelectedCrop] = useState('herb');
+            const [logs, setLogs] = useState(['歡迎來到尋光農場，請點擊格子開始種植！']);
+
+            // 下個月邏輯
+            const handleNextMonth = () => {
+                let nm = month + 1;
+                let ny = year;
+                if (nm > 12) { nm = 1; ny++; }
+                
+                // 更新作物生長
+                const newGrid = grid.map(cell => {
+                    if (!cell) return null;
+                    const nextAge = cell.age + 1;
+                    return { ...cell, age: nextAge, isMature: nextAge >= cell.growth };
+                });
+
+                setGrid(newGrid);
+                setMonth(nm);
+                setYear(ny);
+                setAp(10);
+                addLog(`進入 ${ny} 年 ${nm} 月，體力已恢復。`);
+            };
+
+            const addLog = (msg) => {
+                setLogs(prev => [msg, ...prev].slice(0, 5));
+            };
+
+            const handleCellClick = (i) => {
+                if (ap <= 0) {
+                    addLog("❌ 體力不足！請進入下個月。");
+                    return;
+                }
+
+                const cell = grid[i];
+                
+                // 如果格子是空的：種植
+                if (!cell) {
+                    const crop = CROPS[selectedCrop];
+                    if (money < crop.cost) {
+                        addLog("💰 現金不足，無法種植！");
+                        return;
+                    }
+                    const newGrid = [...grid];
+                    newGrid[i] = { ...crop, age: 0, isMature: false };
+                    setGrid(newGrid);
+                    setMoney(m => m - crop.cost);
+                    setAp(a => a - 1);
+                    addLog(`🌱 種下了 ${crop.name}。`);
+                } 
+                // 如果作物成熟：收割
+                else if (cell.isMature) {
+                    setMoney(m => m + (cell.money || 0));
+                    setCarbon(c => c + cell.carbon);
+                    const newGrid = [...grid];
+                    newGrid[i] = null;
+                    setGrid(newGrid);
+                    setAp(a => a - 1);
+                    addLog(`🧺 收穫 ${cell.name}！獲得了 $${cell.money || 0} 與 ${cell.carbon} 碳匯。`);
+                }
+            };
+
+            return (
+                <div className="h-screen w-screen flex flex-col md:flex-row overflow-hidden text-slate-800">
+                    
+                    {/* --- 左側/頂部 狀態與商店欄 --- */}
+                    <aside className="w-full md:w-80 glass-panel border-b md:border-r flex flex-col z-20 shadow-xl">
+                        <div className="p-6 bg-gradient-to-br from-green-600 to-green-800 text-white">
+                            <h1 className="text-2xl font-bold mb-1 tracking-tight">尋光農場</h1>
+                            <p className="text-green-100 text-xs opacity-80 uppercase tracking-widest">Luminous Farm Pro</p>
+                        </div>
+
+                        <div className="p-4 grid grid-cols-3 md:grid-cols-1 gap-3">
+                            <div className="bg-white/50 p-3 rounded-xl border border-white shadow-sm">
+                                <div className="text-xs text-slate-500 font-bold uppercase">資金</div>
+                                <div className="text-xl font-black text-amber-600">${money}</div>
+                            </div>
+                            <div className="bg-white/50 p-3 rounded-xl border border-white shadow-sm">
+                                <div className="text-xs text-slate-500 font-bold uppercase">碳庫存</div>
+                                <div className="text-xl font-black text-green-700">{carbon}</div>
+                            </div>
+                            <div className="bg-white/50 p-3 rounded-xl border border-white shadow-sm">
+                                <div className="text-xs text-slate-500 font-bold uppercase">時間</div>
+                                <div className="text-lg font-bold">Y{year} / M{month}</div>
+                            </div>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto p-4 hidden md:block">
+                            <h3 className="text-xs font-bold text-slate-400 mb-3 uppercase tracking-widest">種子商店</h3>
+                            <div className="space-y-3">
+                                {Object.values(CROPS).map(crop => (
+                                    <button 
+                                        key={crop.id}
+                                        onClick={() => setSelectedCrop(crop.id)}
+                                        className={`w-full p-3 rounded-2xl border-2 transition-all flex items-center gap-3 ${selectedCrop === crop.id ? 'border-green-500 bg-green-50 shadow-md scale-[1.02]' : 'border-transparent bg-white hover:bg-slate-50'}`}
+                                    >
+                                        <span className="text-3xl">{crop.icon}</span>
+                                        <div className="text-left">
+                                            <div className="font-bold text-sm">{crop.name}</div>
+                                            <div className="text-xs text-slate-500">成本: ${crop.cost} | 成長: {crop.growth}月</div>
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </aside>
+
+                    {/* --- 主要農場區域 --- */}
+                    <main className="flex-1 relative flex flex-col p-4 md:p-8 items-center justify-center overflow-y-auto bg-[#e8ede8]">
+                        
+                        {/* 體力條 */}
+                        <div className="w-full max-w-md mb-6 px-4">
+                            <div className="flex justify-between items-end mb-2">
+                                <span className="font-bold text-slate-600 flex items-center gap-1">⚡ 剩餘體力</span>
+                                <span className="font-black text-blue-600">{ap} / 10</span>
+                            </div>
+                            <div className="h-3 w-full bg-slate-200 rounded-full overflow-hidden shadow-inner">
+                                <div className="h-full bg-blue-500 progress-bar" style={{ width: `${ap * 10}%` }}></div>
+                            </div>
+                        </div>
+
+                        {/* 農場方格 */}
+                        <div className="farm-grid">
+                            {grid.map((cell, i) => (
+                                <div 
+                                    key={i}
+                                    onClick={() => handleCellClick(i)}
+                                    className={`cell-aspect rounded-xl cursor-pointer transition-all flex flex-col items-center justify-center relative shadow-sm hover:shadow-md active:scale-95 ${!cell ? 'bg-white/40 border-2 border-dashed border-slate-300 hover:bg-white/60' : 'bg-white border-2 border-white'}`}
+                                >
+                                    {cell ? (
+                                        <>
+                                            <span className={`text-2xl md:text-4xl animate-pop ${cell.isMature ? 'animate-bounce' : ''}`}>
+                                                {cell.isMature ? cell.icon : '🌱'}
+                                            </span>
+                                            {!cell.isMature && (
+                                                <div className="absolute bottom-1 w-3/4 h-1 bg-slate-100 rounded-full overflow-hidden">
+                                                    <div className="h-full bg-green-400" style={{ width: `${(cell.age / cell.growth) * 100}%` }}></div>
+                                                </div>
+                                            )}
+                                            {cell.isMature && (
+                                                <div className="absolute -top-1 -right-1 bg-amber-400 text-[10px] px-1 rounded font-bold text-white shadow-sm">READY</div>
+                                            )}
+                                        </>
+                                    ) : (
+                                        <span className="text-slate-200 text-xs font-bold uppercase opacity-0 hover:opacity-100 transition-opacity">Plant</span>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* 手機版底部商店切換 (浮動標籤) */}
+                        <div className="md:hidden fixed bottom-24 left-4 right-4 flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                            {Object.values(CROPS).map(crop => (
+                                <button 
+                                    key={crop.id}
+                                    onClick={() => setSelectedCrop(crop.id)}
+                                    className={`flex-shrink-0 px-4 py-2 rounded-full border-2 font-bold shadow-lg transition-all ${selectedCrop === crop.id ? 'bg-green-500 text-white border-green-400 scale-105' : 'bg-white text-slate-600 border-white'}`}
+                                >
+                                    {crop.icon} {crop.name}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* 下個月按鈕 */}
+                        <div className="mt-8 md:mt-12 w-full max-w-md">
+                            <button 
+                                onClick={handleNextMonth}
+                                className="w-full bg-slate-800 hover:bg-slate-900 text-white py-4 rounded-2xl font-black text-xl shadow-2xl transition-transform active:scale-95 flex items-center justify-center gap-3"
+                            >
+                                📅 進入下個月
+                            </button>
+                        </div>
+                    </main>
+
+                    {/* --- 浮動日誌訊息 --- */}
+                    <div className="fixed top-4 right-4 w-64 pointer-events-none hidden md:block">
+                        {logs.map((log, i) => (
+                            <div key={i} className="bg-white/90 backdrop-blur p-3 rounded-lg shadow-lg mb-2 border-l-4 border-green-500 text-xs font-bold animate-pop">
+                                {log}
+                            </div>
+                        ))}
+                    </div>
+                </div>
             );
+        }
 
-            if (!p.drought_resist && !hasProtection) {
-                cell.style.opacity = "0.3"; // 變暗代表受損
-                energy = Math.max(0, energy - 5); // 乾旱扣能量
-            }
-        });
-
-        setTimeout(() => {
-            document.getElementById('weather-val').innerText = "正常";
-            document.getElementById('weather-val').style.color = "black";
-            gardenData.forEach(p => document.getElementById(`cell-${p.index}`).style.opacity = "1");
-        }, 4000); // 乾旱持續 4 秒
-    }
-</script>
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
