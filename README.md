@@ -1,4 +1,13 @@
-# 🌿 食物森林推廣遊戲：城市綠洲計畫 (City Oasis Project)
+# 🌳 食物森林：尋光模擬器 Pro
+
+![Version](https://img.shields.io/badge/Version-2.0-blue.svg)
+![Status](https://img.shields.io/badge/Status-Active-success.svg)
+![Platform](https://img.shields.io/badge/Platform-GitHub_Pages-lightgrey.svg)
+
+### 🏷️ 系統狀態標章說明
+* **`Version 2.0` (版本號)**：系統已從初步的概念驗證進化為完整的「Pro 專業版」。全面實裝了 AP 體力系統、動態天氣（隨機乾旱機制）、作物共生加成（如樹豆固氮、大樹遮蔭）與碳匯經濟演算等進階遊戲邏輯。
+* **`Status Active` (運行狀態)**：目前專案處於**活躍且正式上線**的階段。核心的農場網格互動、狀態動態結算與新手教學 UI 皆已建置完成且穩定運作，玩家可直接透過瀏覽器順暢體驗打造食物森林的樂趣。
+* **`Platform GitHub Pages` (部署平台)**：本模擬器採用純前端架構開發（React + Tailwind CSS in Browser）。不需架設任何後端資料庫，只要託管於 GitHub Pages 等靜態網頁平台即可完美運行，達成**零伺服器負載、隨點即玩**的極致輕量化優勢。
 
 這是一個專為**食物森林（Food Forest）**推廣而設計的開源遊戲化教材。透過互動式的放置經營模式，讓一般民眾與講座參與者能直觀地理解「七層結構」與「生態共生」的核心概念。
 
